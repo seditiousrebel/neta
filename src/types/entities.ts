@@ -103,6 +103,8 @@ export type PoliticianPositionForCard = {
   position_titles: PoliticianPositionTitleForCard | null; 
 };
 
+// This type is no longer actively used as politician_ratings is removed from queries
+// It's kept here for reference if you add the table back.
 export type PoliticianRatingForCard = {
   vote_score: number | null;
 };
@@ -116,7 +118,7 @@ export type PoliticianCardData = {
   media_assets: PoliticianPhoto | null; // For politician's main photo (direct relation from politicians.photo_asset_id)
   party_memberships: PoliticianPartyMembershipForCard[]; 
   politician_positions: PoliticianPositionForCard[]; 
-  politician_ratings: PoliticianRatingForCard[] | null; 
+  // politician_ratings: PoliticianRatingForCard[] | null; // Temporarily removed as table is not in provided DDL
   is_followed_by_user?: boolean;
 };
 
@@ -136,4 +138,3 @@ export type PoliticianFiltersState = {
   provinceId?: string | null;
   searchTerm?: string | null;
 };
-

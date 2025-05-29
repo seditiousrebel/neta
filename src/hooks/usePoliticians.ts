@@ -40,9 +40,9 @@ const fetchPoliticians = async ({
             media_assets:media_assets!parties_logo_asset_id_fkey ( storage_path )
           )
         ),
-        politician_positions ( is_current, position_titles ( id, title ) ),
-        politician_ratings ( vote_score )
+        politician_positions ( is_current, position_titles ( id, title ) )
       `,
+      // Removed: politician_ratings ( vote_score )
       { count: 'exact' } // Request total count
     )
     .range(from, to)

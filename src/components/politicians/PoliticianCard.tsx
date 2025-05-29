@@ -7,7 +7,7 @@ import type { PoliticianCardData } from '@/types/entities';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Heart, Users, Award, MessageSquare, TrendingUp, ShieldCheck } from 'lucide-react';
+import { Heart, Users, Award, MessageSquare, ShieldCheck } from 'lucide-react'; // Removed TrendingUp
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context'; // For follow button
 import { useToast } from '@/hooks/use-toast'; // For follow button
@@ -39,9 +39,9 @@ export function PoliticianCard({ politician }: PoliticianCardProps) {
   const currentPositionInfo = politician.politician_positions?.find(pp => pp.is_current);
   const currentPosition = currentPositionInfo?.position_titles;
 
-  // Get vote score
-  const rating = politician.politician_ratings?.[0]; // Assuming first rating is the relevant one
-  const voteScore = rating?.vote_score;
+  // Vote score logic is removed as politician_ratings table is not in provided DDL
+  // const rating = politician.politician_ratings?.[0]; 
+  // const voteScore = rating?.vote_score;
 
   const placeholderImage = "https://placehold.co/600x400.png";
   const imageUrl = politician.media_assets?.storage_path 
@@ -75,19 +75,21 @@ export function PoliticianCard({ politician }: PoliticianCardProps) {
   if (!isMounted) {
     return (
       <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
-        <Skeleton className="h-48 w-full" />
-        <CardHeader>
-          <Skeleton className="h-6 w-3/4 rounded" />
-          <Skeleton className="h-4 w-1/2 mt-2 rounded" />
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-4 w-full rounded mb-2" />
-          <Skeleton className="h-4 w-5/6 rounded" />
-        </CardContent>
-        <CardFooter className="justify-between">
-           <Skeleton className="h-8 w-20 rounded" />
-           <Skeleton className="h-8 w-8 rounded-full" />
-        </CardFooter>
+        <div className="animate-pulse">
+            <div className="h-48 w-full bg-muted" />
+            <CardHeader>
+            <div className="h-6 w-3/4 rounded bg-muted" />
+            <div className="h-4 w-1/2 mt-2 rounded bg-muted" />
+            </CardHeader>
+            <CardContent>
+            <div className="h-4 w-full rounded bg-muted mb-2" />
+            <div className="h-4 w-5/6 rounded bg-muted" />
+            </CardContent>
+            <CardFooter className="justify-between">
+            <div className="h-8 w-20 rounded bg-muted" />
+            <div className="h-8 w-8 rounded-full bg-muted" />
+            </CardFooter>
+        </div>
       </Card>
     );
   }
@@ -133,12 +135,13 @@ export function PoliticianCard({ politician }: PoliticianCardProps) {
         <p className="text-sm text-foreground/80 line-clamp-3 mb-3">
           {politician.bio || "No biography available."}
         </p>
-        {voteScore !== undefined && voteScore !== null && (
+        {/* Vote score display removed as politician_ratings table is not in provided DDL */}
+        {/* {voteScore !== undefined && voteScore !== null && (
           <div className="flex items-center text-sm">
             <TrendingUp size={16} className="mr-1.5 text-green-500" />
             Vote Score: <span className="font-semibold ml-1">{voteScore}</span>
           </div>
-        )}
+        )} */}
       </CardContent>
       <CardFooter className="flex justify-between items-center border-t pt-4 mt-auto">
         <Button variant="outline" size="sm" asChild>
