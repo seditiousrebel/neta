@@ -3,19 +3,20 @@
 import type { PoliticianPromise } from '@/types/entities';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Target, CheckCircle, XCircle, CalendarClock } from 'lucide-react'; // Added CalendarClock for In Progress/Pending
+import { Target, CheckCircle, XCircle, CalendarClock, AlertCircle } from 'lucide-react'; // Added AlertCircle
+import React from 'react'; // Added React import for React.cloneElement
 
 interface PromisesSectionProps {
   promises?: PoliticianPromise[];
 }
 
-const statusIcons = {
+const statusIcons: { [key: string]: React.ReactElement } = { // Explicitly type statusIcons
   Fulfilled: <CheckCircle className="h-4 w-4 text-green-500" />,
   Broken: <XCircle className="h-4 w-4 text-red-500" />,
   'In Progress': <CalendarClock className="h-4 w-4 text-blue-500" />,
   Pending: <CalendarClock className="h-4 w-4 text-yellow-500" />,
   Overdue: <CalendarClock className="h-4 w-4 text-orange-500" />,
-  Compromised: <AlertCircle className="h-4 w-4 text-purple-500" />, // Assuming AlertCircle for compromised
+  Compromised: <AlertCircle className="h-4 w-4 text-purple-500" />, 
 };
 
 const statusColors: { [key: string]: string } = {
@@ -63,7 +64,6 @@ export default function PromisesSection({ promises = [] }: PromisesSectionProps)
             <div className="flex justify-between items-start mb-1">
               <h4 className="font-semibold text-foreground">{promise.title}</h4>
               <Badge className={`capitalize ${statusColors[promise.status] || 'bg-gray-100 text-gray-700'}`}>
-                {/* @ts-ignore TODO: Fix type for statusIcons or ensure status matches */}
                 {statusIcons[promise.status] && React.cloneElement(statusIcons[promise.status], { className: 'mr-1.5 h-3 w-3' })}
                 {promise.status}
               </Badge>
