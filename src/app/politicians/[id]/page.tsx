@@ -19,11 +19,6 @@ import PromisesSection from '@/components/politicians/detail/PromisesSection';
 
 async function getPoliticianDetails(id: string): Promise<DetailedPolitician | null> {
   const supabase = createSupabaseServerClient();
-  // The select query needs to be very specific about relationships if Supabase can't infer them.
-  // For one-to-many relationships where the FK is on the "many" side (like bill_votes.politician_id),
-  // Supabase client often infers this as table_name(columns).
-  // If there's ambiguity or a non-standard FK name, it might fail.
-  // Let's assume bill_votes.politician_id is the FK.
   const { data, error } = await supabase
     .from('politicians')
     .select(`
@@ -48,12 +43,10 @@ async function getPoliticianDetails(id: string): Promise<DetailedPolitician | nu
       politician_career_entries!politician_id ( * )
     `)
     .eq('id', id)
-    .single<DetailedPolitician>(); // Cast to DetailedPolitician
+    .maybeSingle<DetailedPolitician>(); // Use maybeSingle for resilience
 
   if (error) {
     console.error('Error fetching politician details:', error.message, error.details);
-    // Optionally, you could return null or throw a more specific error
-    // For now, let's return null and let the page handle "not found"
     return null;
   }
   return data;
@@ -61,19 +54,20 @@ async function getPoliticianDetails(id: string): Promise<DetailedPolitician | nu
 
 export default async function PoliticianDetailPage({ params }: { params: { id: string } }) {
   const politicianId = params.id;
-  // A simple check to ensure id is a number-like string before parsing
   if (!/^\d+$/.test(politicianId)) {
+    console.error(`Invalid politician ID format: ${politicianId}`);
     notFound();
   }
-  const parsedId = parseInt(politicianId);
+  const parsedId = parseInt(politicianId, 10);
   if (isNaN(parsedId)) {
+    console.error(`Parsed politician ID is NaN for: ${politicianId}`);
     notFound();
   }
 
   const politician = await getPoliticianDetails(politicianId);
 
   if (!politician) {
-    notFound(); // Or return a custom "Politician not found" component
+    notFound();
   }
 
   return (
@@ -94,8 +88,8 @@ export default async function PoliticianDetailPage({ params }: { params: { id: s
               <CardTitle className="flex items-center"><Briefcase className="mr-2 h-5 w-5 text-primary" /> Current Role & Affiliation</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <CurrentPosition positions={politician.politician_positions} />
-              <PartyAffiliation partyMemberships={politician.party_memberships} />
+              <CurrentPosition positions={politician.politician_positions ?? []} />
+              <PartyAffiliation partyMemberships={politician.party_memberships ?? []} />
             </CardContent>
           </Card>
           
@@ -144,15 +138,15 @@ export default async function PoliticianDetailPage({ params }: { params: { id: s
         </TabsContent>
 
         <TabsContent value="career">
-          <CareerTimeline careerEntries={politician.politician_career_entries} positions={politician.politician_positions} />
+          <CareerTimeline careerEntries={politician.politician_career_entries ?? []} positions={politician.politician_positions ?? []} />
         </TabsContent>
 
         <TabsContent value="voting">
-          <VotingHistory billVotes={politician.bill_votes} />
+          <VotingHistory billVotes={politician.bill_votes ?? []} />
         </TabsContent>
 
         <TabsContent value="promises">
-          <PromisesSection promises={politician.promises} />
+          <PromisesSection promises={politician.promises ?? []} />
         </TabsContent>
       </Tabs>
       <p className="text-xs text-muted-foreground text-center mt-8">

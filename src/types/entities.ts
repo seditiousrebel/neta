@@ -114,8 +114,8 @@ export type PoliticianCardData = {
   public_criminal_records: string | null;
   fts_vector?: any;
   media_assets: PoliticianPhoto | null; // For politician's main photo
-  party_memberships: PoliticianPartyMembershipForCard[];
-  politician_positions: PoliticianPositionForCard[];
+  party_memberships: PoliticianPartyMembershipForCard[] | null;
+  politician_positions: PoliticianPositionForCard[] | null;
   is_followed_by_user?: boolean;
   vote_score: number;
 };
@@ -166,7 +166,7 @@ export type PoliticianPartyMembership = {
   end_date?: string | null;
   role_in_party?: string | null;
   is_active?: boolean | null;
-  parties: PoliticianParty; // Nested party data
+  parties: PoliticianParty | null; // Changed: Allow null for the nested party object
 };
 
 export type PoliticianPositionTitle = {
@@ -183,14 +183,14 @@ export type PoliticianPosition = {
   end_date?: string | null;
   is_current?: boolean | null;
   description?: string | null;
-  position_titles: PoliticianPositionTitle; // Nested position title data
+  position_titles: PoliticianPositionTitle | null; // Changed: Allow null
 };
 
 export type PoliticianBillVote = {
   id: number;
   vote: string; // Assuming 'Yea', 'Nay', 'Abstain' from an ENUM
   voted_at: string;
-  legislative_bills: LegislativeBill; // Nested bill data
+  legislative_bills: LegislativeBill | null; // Changed: Allow null
 };
 
 export type PoliticianPromise = {
@@ -234,11 +234,10 @@ export type DetailedPolitician = {
   created_at: string;
   updated_at: string;
   media_assets: PoliticianMediaAsset | null; // Main photo
-  party_memberships: PoliticianPartyMembership[];
-  politician_positions: PoliticianPosition[];
-  bill_votes: PoliticianBillVote[];
-  promises: PoliticianPromise[];
-  politician_career_entries: PoliticianCareerEntry[];
-  // politician_ratings: any | null; // If you add ratings back
+  party_memberships: PoliticianPartyMembership[] | null;
+  politician_positions: PoliticianPosition[] | null;
+  bill_votes: PoliticianBillVote[] | null;
+  promises: PoliticianPromise[] | null;
+  politician_career_entries: PoliticianCareerEntry[] | null;
   vote_score?: number; // Calculated or from politician_votes summary
 };

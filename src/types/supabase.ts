@@ -34,15 +34,7 @@ export type Database = {
           name?: string
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_icon_asset_id"
-            columns: ["icon_asset_id"]
-            isOneToOne: false
-            referencedRelation: "media_assets"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       bill_votes: {
         Row: {
@@ -129,13 +121,6 @@ export type Database = {
             columns: ["committee_id"]
             isOneToOne: false
             referencedRelation: "committees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "committee_memberships_politician_id_fkey"
-            columns: ["politician_id"]
-            isOneToOne: false
-            referencedRelation: "politicians"
             referencedColumns: ["id"]
           },
         ]
@@ -280,15 +265,7 @@ export type Database = {
           province_id?: number
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "districts_province_id_fkey"
-            columns: ["province_id"]
-            isOneToOne: false
-            referencedRelation: "provinces"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       elections: {
         Row: {
@@ -583,13 +560,6 @@ export type Database = {
             referencedRelation: "legislative_bodies"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "legislative_bills_text_asset_id_fkey"
-            columns: ["text_asset_id"]
-            isOneToOne: false
-            referencedRelation: "media_assets"
-            referencedColumns: ["id"]
-          },
         ]
       }
       legislative_bodies: {
@@ -620,48 +590,40 @@ export type Database = {
         Row: {
           alt_text: string | null
           caption: string | null
-          created_at: string | null
+          created_at: string
           file_name: string | null
           file_size_bytes: number | null
           id: number
           mime_type: string | null
           storage_path: string
-          updated_at: string | null
+          updated_at: string
           uploaded_by: string | null
         }
         Insert: {
           alt_text?: string | null
           caption?: string | null
-          created_at?: string | null
+          created_at?: string
           file_name?: string | null
           file_size_bytes?: number | null
           id?: number
           mime_type?: string | null
           storage_path: string
-          updated_at?: string | null
+          updated_at?: string
           uploaded_by?: string | null
         }
         Update: {
           alt_text?: string | null
           caption?: string | null
-          created_at?: string | null
+          created_at?: string
           file_name?: string | null
           file_size_bytes?: number | null
           id?: number
           mime_type?: string | null
           storage_path?: string
-          updated_at?: string | null
+          updated_at?: string
           uploaded_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "media_assets_uploaded_by_fkey"
-            columns: ["uploaded_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       municipalities: {
         Row: {
@@ -824,7 +786,7 @@ export type Database = {
           chairperson_id: number | null
           contact_email: string | null
           contact_phone: string | null
-          created_at: string | null
+          created_at: string
           election_symbol_asset_id: number | null
           facebook_profile_url: string | null
           founded_date: string | null
@@ -840,7 +802,7 @@ export type Database = {
           name_nepali: string | null
           registration_number: string | null
           twitter_handle: string | null
-          updated_at: string | null
+          updated_at: string
           website_url: string | null
         }
         Insert: {
@@ -848,7 +810,7 @@ export type Database = {
           chairperson_id?: number | null
           contact_email?: string | null
           contact_phone?: string | null
-          created_at?: string | null
+          created_at?: string
           election_symbol_asset_id?: number | null
           facebook_profile_url?: string | null
           founded_date?: string | null
@@ -857,14 +819,14 @@ export type Database = {
           general_secretary_id?: number | null
           headquarters_address?: string | null
           history?: string | null
-          id?: number
+          id?: never
           ideology?: string | null
           logo_asset_id?: number | null
           name: string
           name_nepali?: string | null
           registration_number?: string | null
           twitter_handle?: string | null
-          updated_at?: string | null
+          updated_at?: string
           website_url?: string | null
         }
         Update: {
@@ -872,7 +834,7 @@ export type Database = {
           chairperson_id?: number | null
           contact_email?: string | null
           contact_phone?: string | null
-          created_at?: string | null
+          created_at?: string
           election_symbol_asset_id?: number | null
           facebook_profile_url?: string | null
           founded_date?: string | null
@@ -881,14 +843,14 @@ export type Database = {
           general_secretary_id?: number | null
           headquarters_address?: string | null
           history?: string | null
-          id?: number
+          id?: never
           ideology?: string | null
           logo_asset_id?: number | null
           name?: string
           name_nepali?: string | null
           registration_number?: string | null
           twitter_handle?: string | null
-          updated_at?: string | null
+          updated_at?: string
           website_url?: string | null
         }
         Relationships: [
@@ -959,22 +921,7 @@ export type Database = {
           start_date?: string
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "party_alliances_party_a_id_fkey"
-            columns: ["party_a_id"]
-            isOneToOne: false
-            referencedRelation: "parties"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "party_alliances_party_b_id_fkey"
-            columns: ["party_b_id"]
-            isOneToOne: false
-            referencedRelation: "parties"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       party_election_results: {
         Row: {
@@ -1028,18 +975,11 @@ export type Database = {
             referencedRelation: "elections"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "party_election_results_party_id_fkey"
-            columns: ["party_id"]
-            isOneToOne: false
-            referencedRelation: "parties"
-            referencedColumns: ["id"]
-          },
         ]
       }
       party_memberships: {
         Row: {
-          created_at: string | null
+          created_at: string
           end_date: string | null
           id: number
           is_active: boolean | null
@@ -1047,29 +987,29 @@ export type Database = {
           politician_id: number
           role_in_party: string | null
           start_date: string | null
-          updated_at: string | null
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
+          created_at?: string
           end_date?: string | null
-          id?: number
+          id?: never
           is_active?: boolean | null
           party_id: number
           politician_id: number
           role_in_party?: string | null
           start_date?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Update: {
-          created_at?: string | null
+          created_at?: string
           end_date?: string | null
-          id?: number
+          id?: never
           is_active?: boolean | null
           party_id?: number
           politician_id?: number
           role_in_party?: string | null
           start_date?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
@@ -1116,22 +1056,7 @@ export type Database = {
           split_date?: string
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "party_splits_new_party_id_fkey"
-            columns: ["new_party_id"]
-            isOneToOne: false
-            referencedRelation: "parties"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "party_splits_original_party_id_fkey"
-            columns: ["original_party_id"]
-            isOneToOne: false
-            referencedRelation: "parties"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       pending_edits: {
         Row: {
@@ -1227,25 +1152,16 @@ export type Database = {
           title?: string
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "politician_career_entries_politician_id_fkey"
-            columns: ["politician_id"]
-            isOneToOne: false
-            referencedRelation: "politicians"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       politician_positions: {
         Row: {
           constituency_id: number | null
-          created_at: string | null
+          created_at: string
           description: string | null
           election_id: number | null
           election_method: Database["public"]["Enums"]["election_method"] | null
           end_date: string | null
-          end_date_bs: string | null
           id: number
           is_current: boolean | null
           legislative_body_id: number | null
@@ -1254,20 +1170,18 @@ export type Database = {
           politician_id: number
           position_title_id: number
           start_date: string
-          start_date_bs: string | null
-          updated_at: string | null
+          updated_at: string
         }
         Insert: {
           constituency_id?: number | null
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           election_id?: number | null
           election_method?:
             | Database["public"]["Enums"]["election_method"]
             | null
           end_date?: string | null
-          end_date_bs?: string | null
-          id?: number
+          id?: never
           is_current?: boolean | null
           legislative_body_id?: number | null
           municipality_id?: number | null
@@ -1275,20 +1189,18 @@ export type Database = {
           politician_id: number
           position_title_id: number
           start_date: string
-          start_date_bs?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Update: {
           constituency_id?: number | null
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           election_id?: number | null
           election_method?:
             | Database["public"]["Enums"]["election_method"]
             | null
           end_date?: string | null
-          end_date_bs?: string | null
-          id?: number
+          id?: never
           is_current?: boolean | null
           legislative_body_id?: number | null
           municipality_id?: number | null
@@ -1296,38 +1208,9 @@ export type Database = {
           politician_id?: number
           position_title_id?: number
           start_date?: string
-          start_date_bs?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "politician_positions_constituency_id_fkey"
-            columns: ["constituency_id"]
-            isOneToOne: false
-            referencedRelation: "constituencies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "politician_positions_election_id_fkey"
-            columns: ["election_id"]
-            isOneToOne: false
-            referencedRelation: "elections"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "politician_positions_legislative_body_id_fkey"
-            columns: ["legislative_body_id"]
-            isOneToOne: false
-            referencedRelation: "legislative_bodies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "politician_positions_municipality_id_fkey"
-            columns: ["municipality_id"]
-            isOneToOne: false
-            referencedRelation: "municipalities"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "politician_positions_party_at_time_id_fkey"
             columns: ["party_at_time_id"]
@@ -1379,11 +1262,38 @@ export type Database = {
           updated_at?: string | null
           vote_score?: number
         }
+        Relationships: []
+      }
+      politician_votes: {
+        Row: {
+          created_at: string
+          id: number
+          politician_id: number
+          updated_at: string
+          user_id: string
+          vote_type: number
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          politician_id: number
+          updated_at?: string
+          user_id: string
+          vote_type: number
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          politician_id?: number
+          updated_at?: string
+          user_id?: string
+          vote_type?: number
+        }
         Relationships: [
           {
-            foreignKeyName: "politician_ratings_politician_id_fkey"
+            foreignKeyName: "politician_votes_politician_id_fkey"
             columns: ["politician_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "politicians"
             referencedColumns: ["id"]
           },
@@ -1395,14 +1305,14 @@ export type Database = {
           bio: string | null
           contact_email: string | null
           contact_phone: string | null
-          created_at: string | null
+          created_at: string
           current_address: string | null
           dob: string | null
           dob_bs: string | null
           education: string | null
           facebook_profile_url: string | null
           fts_vector: unknown | null
-          gender: Database["public"]["Enums"]["gender_enum"] | null
+          gender: string | null
           id: number
           is_independent: boolean
           name: string
@@ -1410,57 +1320,60 @@ export type Database = {
           permanent_address: string | null
           photo_asset_id: number | null
           political_journey: string | null
+          province_id: number | null
           public_criminal_records: string | null
           twitter_handle: string | null
-          updated_at: string | null
+          updated_at: string
         }
         Insert: {
           asset_declarations?: string | null
           bio?: string | null
           contact_email?: string | null
           contact_phone?: string | null
-          created_at?: string | null
+          created_at?: string
           current_address?: string | null
           dob?: string | null
           dob_bs?: string | null
           education?: string | null
           facebook_profile_url?: string | null
           fts_vector?: unknown | null
-          gender?: Database["public"]["Enums"]["gender_enum"] | null
-          id?: number
+          gender?: string | null
+          id?: never
           is_independent?: boolean
           name: string
           name_nepali?: string | null
           permanent_address?: string | null
           photo_asset_id?: number | null
           political_journey?: string | null
+          province_id?: number | null
           public_criminal_records?: string | null
           twitter_handle?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Update: {
           asset_declarations?: string | null
           bio?: string | null
           contact_email?: string | null
           contact_phone?: string | null
-          created_at?: string | null
+          created_at?: string
           current_address?: string | null
           dob?: string | null
           dob_bs?: string | null
           education?: string | null
           facebook_profile_url?: string | null
           fts_vector?: unknown | null
-          gender?: Database["public"]["Enums"]["gender_enum"] | null
-          id?: number
+          gender?: string | null
+          id?: never
           is_independent?: boolean
           name?: string
           name_nepali?: string | null
           permanent_address?: string | null
           photo_asset_id?: number | null
           political_journey?: string | null
+          province_id?: number | null
           public_criminal_records?: string | null
           twitter_handle?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
@@ -1470,48 +1383,35 @@ export type Database = {
             referencedRelation: "media_assets"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "politicians_province_id_fkey"
+            columns: ["province_id"]
+            isOneToOne: false
+            referencedRelation: "provinces"
+            referencedColumns: ["id"]
+          },
         ]
       }
       position_titles: {
         Row: {
-          category: string | null
-          created_at: string | null
-          description: string | null
+          created_at: string
           id: number
-          legislative_body_id: number | null
           title: string
-          title_nepali: string | null
-          updated_at: string | null
+          updated_at: string
         }
         Insert: {
-          category?: string | null
-          created_at?: string | null
-          description?: string | null
-          id?: number
-          legislative_body_id?: number | null
+          created_at?: string
+          id?: never
           title: string
-          title_nepali?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Update: {
-          category?: string | null
-          created_at?: string | null
-          description?: string | null
-          id?: number
-          legislative_body_id?: number | null
+          created_at?: string
+          id?: never
           title?: string
-          title_nepali?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "position_titles_legislative_body_id_fkey"
-            columns: ["legislative_body_id"]
-            isOneToOne: false
-            referencedRelation: "legislative_bodies"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -1592,13 +1492,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "promises_party_id_fkey"
-            columns: ["party_id"]
-            isOneToOne: false
-            referencedRelation: "parties"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "promises_politician_id_fkey"
             columns: ["politician_id"]
             isOneToOne: false
@@ -1609,22 +1502,22 @@ export type Database = {
       }
       provinces: {
         Row: {
-          created_at: string | null
+          created_at: string
           id: number
           name: string
-          updated_at: string | null
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
+          created_at?: string
           id?: number
           name: string
-          updated_at?: string | null
+          updated_at?: string
         }
         Update: {
-          created_at?: string | null
+          created_at?: string
           id?: number
           name?: string
-          updated_at?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1688,6 +1581,8 @@ export type Database = {
       users: {
         Row: {
           avatar_asset_id: number | null
+          avatar_url: string | null
+          bio: string | null
           contribution_points: number
           created_at: string | null
           email: string | null
@@ -1698,6 +1593,8 @@ export type Database = {
         }
         Insert: {
           avatar_asset_id?: number | null
+          avatar_url?: string | null
+          bio?: string | null
           contribution_points?: number
           created_at?: string | null
           email?: string | null
@@ -1708,6 +1605,8 @@ export type Database = {
         }
         Update: {
           avatar_asset_id?: number | null
+          avatar_url?: string | null
+          bio?: string | null
           contribution_points?: number
           created_at?: string | null
           email?: string | null
@@ -1716,15 +1615,7 @@ export type Database = {
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_avatar_asset_id"
-            columns: ["avatar_asset_id"]
-            isOneToOne: false
-            referencedRelation: "media_assets"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
@@ -1799,7 +1690,7 @@ export type Database = {
         | "Controversy"
         | "Election"
         | "PositionTitle"
-      gender_enum: "Male" | "Female" | "Other"
+      gender_enum: "Male" | "Female"
       legislative_body_name:
         | "House of Representatives"
         | "National Assembly"
@@ -2009,7 +1900,7 @@ export const Constants = {
         "Election",
         "PositionTitle",
       ],
-      gender_enum: ["Male", "Female", "Other"],
+      gender_enum: ["Male", "Female"],
       legislative_body_name: [
         "House of Representatives",
         "National Assembly",
