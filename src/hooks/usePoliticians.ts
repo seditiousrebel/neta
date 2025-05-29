@@ -9,14 +9,14 @@ import type { Database } from '@/types/supabase';
 const ITEMS_PER_PAGE = 12;
 
 interface FetchPoliticiansParams extends PoliticianFiltersState {
-  pageParam?: number; // For infinite query, this is the offset or page number
+  pageParam?: number; 
 }
 
 const fetchPoliticians = async ({
-  pageParam = 0, // Start with offset 0 for the first page
+  pageParam = 0, 
   searchTerm,
   partyId,
-  // provinceId, // Add if province filter is implemented
+  // provinceId, 
 }: FetchPoliticiansParams): Promise<{ data: PoliticianCardData[], nextPage: number | null, totalCount: number | null }> => {
   const supabase = createSupabaseBrowserClient();
   const from = pageParam * ITEMS_PER_PAGE;
@@ -42,8 +42,8 @@ const fetchPoliticians = async ({
         ),
         politician_positions ( is_current, position_titles ( id, title ) )
       `,
-      // Removed: politician_ratings ( vote_score )
-      { count: 'exact' } // Request total count
+      // vote_score will be fetched separately or via a view/function in a real app for performance
+      { count: 'exact' }
     )
     .range(from, to)
     .order('name', { ascending: true });
@@ -55,21 +55,35 @@ const fetchPoliticians = async ({
     query = query.filter('party_memberships.parties.id', 'eq', partyId);
   }
   // if (provinceId && provinceId.trim() !== '' && provinceId !== 'all') {
-  //   query = query.eq('province_id', provinceId); // Assuming 'province_id' column on 'politicians'
+  //   query = query.eq('province_id', provinceId);
   // }
   
-  const { data, error, count } = await query;
+  const { data: politiciansWithoutScores, error, count } = await query;
 
   if (error) {
     console.error('Error fetching politicians (client-side hook). Message:', error.message, 'Details:', error.details);
-    console.error('Full Supabase error object for client-side politicians fetch:', JSON.stringify(error, null, 2));
     throw new Error(error.message || 'Failed to fetch politicians');
   }
+
+  // Manually fetch vote scores for each politician
+  // This is N+1, not ideal for production. A database view or function is better.
+   const politiciansWithScores = politiciansWithoutScores && politiciansWithoutScores.length > 0 ? await Promise.all(politiciansWithoutScores.map(async (p: any) => {
+    const { data: votes, error: voteError } = await supabase
+      .from('politician_votes')
+      .select('vote_type')
+      .eq('politician_id', p.id);
+    if (voteError) {
+      console.error(`Error fetching votes for politician ${p.id}:`, voteError);
+      return { ...p, vote_score: 0 };
+    }
+    const vote_score = votes ? votes.reduce((acc, v) => acc + v.vote_type, 0) : 0;
+    return { ...p, vote_score };
+  })) : [];
   
-  const hasMore = (from + (data?.length || 0)) < (count || 0);
+  const hasMore = (from + (politiciansWithScores?.length || 0)) < (count || 0);
   
   return { 
-    data: data || [], 
+    data: politiciansWithScores as PoliticianCardData[], 
     nextPage: hasMore ? pageParam + 1 : null,
     totalCount: count 
   };

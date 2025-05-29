@@ -4,7 +4,7 @@ export interface User {
   name?: string | null; // Corresponds to full_name from public.users or auth metadata
   email?: string | null;
   avatarUrl?: string | null; // URL from public.users.avatar_url or auth metadata
-  bio?: string | null; // From public.users.bio
+  bio?: string | null; // From public.users.bio or auth metadata
   role?: "User" | "Admin" | string | null; // Role from public.users
   contributionPoints?: number | null; // From public.users
 }
@@ -85,12 +85,12 @@ export type PoliticianPartyForCard = {
   id: number;
   name: string;
   abbreviation: string | null;
-  media_assets?: PoliticianPhoto | null; 
+  media_assets?: PoliticianPhoto | null;
 };
 
 export type PoliticianPartyMembershipForCard = {
   is_active: boolean;
-  parties: PoliticianPartyForCard | null; 
+  parties: PoliticianPartyForCard | null;
 };
 
 export type PoliticianPositionTitleForCard = {
@@ -100,13 +100,7 @@ export type PoliticianPositionTitleForCard = {
 
 export type PoliticianPositionForCard = {
   is_current: boolean;
-  position_titles: PoliticianPositionTitleForCard | null; 
-};
-
-// This type is no longer actively used as politician_ratings is removed from queries
-// It's kept here for reference if you add the table back.
-export type PoliticianRatingForCard = {
-  vote_score: number | null;
+  position_titles: PoliticianPositionTitleForCard | null;
 };
 
 // This is the main type for items in the politician directory list
@@ -114,12 +108,13 @@ export type PoliticianCardData = {
   id: number;
   name: string;
   bio: string | null;
-  fts_vector?: any; 
+  fts_vector?: any;
   media_assets: PoliticianPhoto | null; // For politician's main photo (direct relation from politicians.photo_asset_id)
-  party_memberships: PoliticianPartyMembershipForCard[]; 
-  politician_positions: PoliticianPositionForCard[]; 
-  // politician_ratings: PoliticianRatingForCard[] | null; // Temporarily removed as table is not in provided DDL
+  party_memberships: PoliticianPartyMembershipForCard[];
+  politician_positions: PoliticianPositionForCard[];
   is_followed_by_user?: boolean;
+  vote_score: number; // Total sum of votes (upvotes - downvotes)
+  // user_vote_status will be managed client-side in the PoliticianCard component
 };
 
 // For filter dropdowns
@@ -129,7 +124,7 @@ export interface PartyFilterOption {
 }
 
 export interface ProvinceFilterOption {
-  id: number; 
+  id: number;
   name: string;
 }
 
@@ -138,3 +133,4 @@ export type PoliticianFiltersState = {
   provinceId?: string | null;
   searchTerm?: string | null;
 };
+
