@@ -72,9 +72,9 @@ export function SideNav() {
       className="hidden border-r bg-sidebar text-sidebar-foreground md:flex" // Desktop only
     >
       <SidebarHeader className="p-4">
+        {/* Logo removed from here */}
         <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-          {/* The NetrikaLogo component itself renders the "Netrika" name. Removed extra span. */}
-          <NetrikaLogo className="h-8 w-auto group-data-[collapsible=icon]:h-7" />
+          {/* If you want a placeholder or a different icon here, you can add it */}
         </Link>
       </SidebarHeader>
       <SidebarContent className="p-2">
