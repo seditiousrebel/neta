@@ -19,6 +19,11 @@ import PromisesSection from '@/components/politicians/detail/PromisesSection';
 
 async function getPoliticianDetails(id: string): Promise<DetailedPolitician | null> {
   const supabase = createSupabaseServerClient();
+  // The select query needs to be very specific about relationships if Supabase can't infer them.
+  // For one-to-many relationships where the FK is on the "many" side (like bill_votes.politician_id),
+  // Supabase client often infers this as table_name(columns).
+  // If there's ambiguity or a non-standard FK name, it might fail.
+  // Let's assume bill_votes.politician_id is the FK.
   const { data, error } = await supabase
     .from('politicians')
     .select(`
@@ -35,12 +40,12 @@ async function getPoliticianDetails(id: string): Promise<DetailedPolitician | nu
         *,
         position_titles ( * )
       ),
-      bill_votes (
+      bill_votes!politician_id (
         *,
         legislative_bills ( * )
       ),
-      promises ( * ),
-      politician_career_entries ( * )
+      promises!politician_id ( * ),
+      politician_career_entries!politician_id ( * )
     `)
     .eq('id', id)
     .single<DetailedPolitician>(); // Cast to DetailedPolitician
@@ -56,7 +61,12 @@ async function getPoliticianDetails(id: string): Promise<DetailedPolitician | nu
 
 export default async function PoliticianDetailPage({ params }: { params: { id: string } }) {
   const politicianId = params.id;
-  if (isNaN(parseInt(politicianId))) {
+  // A simple check to ensure id is a number-like string before parsing
+  if (!/^\d+$/.test(politicianId)) {
+    notFound();
+  }
+  const parsedId = parseInt(politicianId);
+  if (isNaN(parsedId)) {
     notFound();
   }
 
