@@ -136,12 +136,12 @@ export function SideNav() {
                 <SidebarMenuButton
                   asChild
                   className="justify-start w-full"
-                  tooltip={{ children: 'Login / Sign Up', side: 'right', align: 'center' }}
+                  tooltip={{ children: 'Login', side: 'right', align: 'center' }}
                 >
                   <Link href="/auth/login" className="flex items-center gap-3">
                     <LogIn className="h-5 w-5" />
                     <div className="group-data-[collapsible=icon]:hidden overflow-hidden">
-                      <span className="block truncate font-medium">Login / Sign Up</span>
+                      <span className="block truncate font-medium">Login</span>
                     </div>
                   </Link>
                 </SidebarMenuButton>
