@@ -37,26 +37,40 @@ export default async function ProfilePage() {
       contribution_points
     `)
     .eq('id', authUser.id)
-    .single<Tables<'users'>['Row'] & { bio?: string | null }>(); // Add bio to the type
+    .maybeSingle<Tables<'users'>['Row'] & { bio?: string | null }>(); // Use maybeSingle
 
-  if (profileError || !userProfileData) {
-    console.error('Error fetching user profile:', profileError?.message);
-    // Potentially redirect to an error page or show a message
-    // For now, we'll try to construct a minimal user object or redirect
-    redirect('/auth/login?error=profile_fetch_failed'); 
+  let currentUser: User;
+
+  if (profileError) {
+    console.error('Error fetching user profile from public.users:', profileError.message);
+    // Do not redirect to login if authUser exists. Construct currentUser with authUser data.
+  }
+
+  if (userProfileData) {
+    currentUser = {
+      id: userProfileData.id,
+      name: userProfileData.full_name,
+      email: userProfileData.email,
+      avatarUrl: userProfileData.avatar_url,
+      bio: userProfileData.bio,
+      role: userProfileData.role,
+      contributionPoints: userProfileData.contribution_points,
+    };
+  } else {
+    // If userProfileData is null (either due to an error handled above or no record found),
+    // construct currentUser with data from authUser and defaults.
+    console.warn(`No public.users record found for user ID: ${authUser.id}. Using fallback data.`);
+    currentUser = {
+      id: authUser.id,
+      name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
+      email: authUser.email,
+      avatarUrl: authUser.user_metadata?.avatar_url || null,
+      bio: authUser.user_metadata?.bio || null,
+      role: 'User', // Default role
+      contributionPoints: 0, // Default points
+    };
   }
   
-  // Construct the User object for the ProfileForm and display
-  const currentUser: User = {
-    id: userProfileData.id,
-    name: userProfileData.full_name,
-    email: userProfileData.email, // email from users table (synced by trigger)
-    avatarUrl: userProfileData.avatar_url,
-    bio: userProfileData.bio,
-    role: userProfileData.role,
-    contributionPoints: userProfileData.contribution_points,
-  };
-
   // Fetch user badges (joining user_badges with badges table)
   const { data: badgesData, error: badgesError } = await supabase
     .from('user_badges')
@@ -234,3 +248,5 @@ export default async function ProfilePage() {
     </div>
   );
 }
+
+    
