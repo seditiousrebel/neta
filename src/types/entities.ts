@@ -85,7 +85,7 @@ export type PoliticianPartyForCard = {
   id: number;
   name: string;
   abbreviation: string | null;
-  media_assets?: PoliticianPhoto | null;
+  media_assets?: PoliticianPhoto | null; // This specifically targets the logo via alias
 };
 
 export type PoliticianPartyMembershipForCard = {
@@ -108,13 +108,13 @@ export type PoliticianCardData = {
   id: number;
   name: string;
   bio: string | null;
+  public_criminal_records: string | null; // Added for criminal record indicator
   fts_vector?: any;
-  media_assets: PoliticianPhoto | null; // For politician's main photo (direct relation from politicians.photo_asset_id)
+  media_assets: PoliticianPhoto | null; // For politician's main photo
   party_memberships: PoliticianPartyMembershipForCard[];
   politician_positions: PoliticianPositionForCard[];
-  is_followed_by_user?: boolean;
+  is_followed_by_user?: boolean; // Will be handled client-side or via specific user query
   vote_score: number; // Total sum of votes (upvotes - downvotes)
-  // user_vote_status will be managed client-side in the PoliticianCard component
 };
 
 // For filter dropdowns
@@ -132,5 +132,5 @@ export type PoliticianFiltersState = {
   partyId?: string | null;
   provinceId?: string | null;
   searchTerm?: string | null;
+  hasCriminalRecord?: "any" | "yes" | "no" | null; // Added for criminal record filter
 };
-

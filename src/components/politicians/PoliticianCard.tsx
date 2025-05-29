@@ -7,7 +7,7 @@ import type { PoliticianCardData } from '@/types/entities';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Heart, Users, ShieldCheck, ArrowUp, ArrowDown } from 'lucide-react'; 
+import { Heart, Users, ShieldCheck, ArrowUp, ArrowDown, FileWarning } from 'lucide-react'; 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/auth-context'; 
 import { useToast } from '@/hooks/use-toast'; 
@@ -33,7 +33,7 @@ export function PoliticianCard({ politician }: PoliticianCardProps) {
 
   const [isFollowed, setIsFollowed] = useState(politician.is_followed_by_user || false);
   const [currentVoteScore, setCurrentVoteScore] = useState(politician.vote_score || 0);
-  const [userVoteStatus, setUserVoteStatus] = useState<'up' | 'down' | null>(null); // 'up', 'down', or null
+  const [userVoteStatus, setUserVoteStatus] = useState<'up' | 'down' | null>(null);
 
   const currentPartyMembership = politician.party_memberships?.find(pm => pm.is_active);
   const currentParty = currentPartyMembership?.parties;
@@ -50,7 +50,8 @@ export function PoliticianCard({ politician }: PoliticianCardProps) {
                       ? getStorageUrl(currentParty.media_assets.storage_path)
                       : null;
 
-  // Fetch user's current vote for this politician on mount
+  const hasCriminalRecord = politician.public_criminal_records && politician.public_criminal_records.trim() !== '';
+
   useEffect(() => {
     const fetchUserVote = async () => {
       if (isAuthenticated && user) {
@@ -87,31 +88,28 @@ export function PoliticianCard({ politician }: PoliticianCardProps) {
     let newOptimisticScore = currentVoteScore;
     let dbVoteValue: 1 | -1 = newVoteType === 'up' ? 1 : -1;
 
-    if (userVoteStatus === newVoteType) { // Clicking the same button again (undo vote)
-      // User is undoing their vote
+    if (userVoteStatus === newVoteType) { 
       newOptimisticScore += (newVoteType === 'up' ? -1 : 1);
       setUserVoteStatus(null);
-      // Delete the vote from DB
       const { error } = await supabase
         .from('politician_votes')
         .delete()
         .match({ politician_id: politician.id, user_id: user.id });
       if (error) {
         toast({ title: "Error undoing vote", description: error.message, variant: "destructive" });
-        // Revert optimistic update
-        setUserVoteStatus(newVoteType);
-        // score will be refetched or re-calculated if needed, or revert optimistic score change here
+        setUserVoteStatus(newVoteType); 
+        // Revert optimistic score on error
+        setCurrentVoteScore(currentVoteScore);
       } else {
         toast({ title: "Vote removed" });
       }
-    } else { // New vote or changing vote
-      if (userVoteStatus === 'up') newOptimisticScore -= 1; // Was upvoted
-      if (userVoteStatus === 'down') newOptimisticScore += 1; // Was downvoted
+    } else { 
+      if (userVoteStatus === 'up') newOptimisticScore -= 1; 
+      if (userVoteStatus === 'down') newOptimisticScore += 1; 
       
       newOptimisticScore += (newVoteType === 'up' ? 1 : -1);
       setUserVoteStatus(newVoteType);
 
-      // Upsert the vote (insert or update if exists)
       const { error } = await supabase
         .from('politician_votes')
         .upsert(
@@ -120,13 +118,14 @@ export function PoliticianCard({ politician }: PoliticianCardProps) {
         );
       if (error) {
         toast({ title: "Error casting vote", description: error.message, variant: "destructive" });
-        // Revert optimistic update (simplified: refetch or more complex state management needed for perfect revert)
-        setUserVoteStatus(userVoteStatus); // Revert to previous
+        setUserVoteStatus(userVoteStatus); // Revert to previous button state
+         // Revert optimistic score on error
+        setCurrentVoteScore(currentVoteScore);
       } else {
         toast({ title: `Voted ${newVoteType}!`});
       }
     }
-    setCurrentVoteScore(newOptimisticScore); // Update score shown immediately
+    setCurrentVoteScore(newOptimisticScore); 
   };
 
   const [isMounted, setIsMounted] = useState(false);
@@ -165,6 +164,11 @@ export function PoliticianCard({ politician }: PoliticianCardProps) {
             objectFit="cover"
             data-ai-hint="politician portrait"
           />
+          {hasCriminalRecord && (
+            <Badge variant="destructive" className="absolute top-2 right-2 text-xs px-1.5 py-0.5">
+              <FileWarning size={12} className="mr-1" /> Record
+            </Badge>
+          )}
         </div>
       </Link>
       <CardHeader className="pb-3">
@@ -202,10 +206,11 @@ export function PoliticianCard({ politician }: PoliticianCardProps) {
                 className={cn("p-1 h-auto", userVoteStatus === 'up' && "text-primary bg-primary/10")}
                 aria-pressed={userVoteStatus === 'up'}
                 disabled={!isAuthenticated}
+                title="Upvote"
             >
                 <ArrowUp className="h-4 w-4" />
             </Button>
-            <span className="font-semibold min-w-[20px] text-center">{currentVoteScore}</span>
+            <span className="font-semibold min-w-[20px] text-center tabular-nums">{currentVoteScore}</span>
             <Button
                 variant="ghost"
                 size="sm"
@@ -213,6 +218,7 @@ export function PoliticianCard({ politician }: PoliticianCardProps) {
                 className={cn("p-1 h-auto", userVoteStatus === 'down' && "text-destructive bg-destructive/10")}
                 aria-pressed={userVoteStatus === 'down'}
                 disabled={!isAuthenticated}
+                title="Downvote"
             >
                 <ArrowDown className="h-4 w-4" />
             </Button>
