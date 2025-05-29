@@ -28,19 +28,19 @@ export default async function ProfilePage() {
   }
 
   // Fetch detailed user profile from public.users
+  // Removed avatar_url from this select statement
   const { data: userProfileData, error: profileError } = await supabase
     .from('users')
     .select(`
       id,
       full_name,
       email,
-      avatar_url,
       bio,
       role,
       contribution_points
     `)
     .eq('id', authUser.id)
-    .maybeSingle<Tables<'users'>['Row'] & { bio?: string | null; avatar_url?: string | null }>(); // Ensure avatar_url is in select and type
+    .maybeSingle<Omit<Tables<'users'>['Row'], 'avatar_url'> & { bio?: string | null }>(); // Adjusted type to reflect avatar_url removal for this query
 
   let currentUser: User;
 
@@ -54,7 +54,8 @@ export default async function ProfilePage() {
       id: userProfileData.id,
       name: userProfileData.full_name,
       email: userProfileData.email,
-      avatarUrl: userProfileData.avatar_url, // Use avatar_url from public.users
+      // Avatar primarily from auth.users.user_metadata, then placeholder
+      avatarUrl: authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${getInitials(userProfileData.full_name)}`,
       bio: userProfileData.bio,
       role: userProfileData.role,
       contributionPoints: userProfileData.contribution_points,
@@ -67,8 +68,8 @@ export default async function ProfilePage() {
       id: authUser.id,
       name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
       email: authUser.email,
-      avatarUrl: authUser.user_metadata?.avatar_url || null, // Fallback to auth.users metadata
-      bio: (authUser.user_metadata?.bio as string) || null, // Explicitly cast bio if needed
+      avatarUrl: authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${getInitials(authUser.user_metadata?.full_name || authUser.email)}`,
+      bio: (authUser.user_metadata?.bio as string) || null,
       role: 'User', // Default role
       contributionPoints: 0, // Default points
     };
@@ -241,3 +242,5 @@ export default async function ProfilePage() {
     </div>
   );
 }
+
+    

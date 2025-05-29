@@ -10,9 +10,8 @@ import { z } from "zod";
 const UpdateProfileSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters.").max(100),
   bio: z.string().max(500, "Bio cannot exceed 500 characters.").optional().nullable(),
-  // avatarUrl will be the new public URL from Supabase Storage, if changed
+  // newAvatarUrl will be the new public URL from Supabase Storage, if changed, to update auth.users.user_metadata
   newAvatarUrl: z.string().url("Invalid new avatar URL.").optional().nullable(),
-  // oldAvatarPath: z.string().optional().nullable(), // Path of the old avatar for deletion
 });
 
 export async function updateUserProfile(formData: FormData) {
@@ -38,12 +37,13 @@ export async function updateUserProfile(formData: FormData) {
 
   const { fullName, bio, newAvatarUrl } = validation.data;
   
-  const updatesForPublicUser: { full_name: string; bio?: string | null; avatar_url?: string | null } = {
+  // Updates for public.users table. We no longer try to update avatar_url here.
+  const updatesForPublicUser: { full_name: string; bio?: string | null; } = {
     full_name: fullName,
   };
-  if (bio !== undefined) updatesForPublicUser.bio = bio; // Only include bio if it's part of the form
-  if (newAvatarUrl) updatesForPublicUser.avatar_url = newAvatarUrl;
+  if (bio !== undefined) updatesForPublicUser.bio = bio;
 
+  // Updates for auth.users user_metadata.
   const updatesForAuthUser: { full_name: string; avatar_url?: string | null } = {
     full_name: fullName,
   };
@@ -58,20 +58,19 @@ export async function updateUserProfile(formData: FormData) {
 
   if (publicUserUpdateError) {
     console.error("Error updating public.users table:", publicUserUpdateError);
-    return { success: false, error: `Failed to update profile: ${publicUserUpdateError.message}` };
+    return { success: false, error: `Failed to update profile details: ${publicUserUpdateError.message}` };
   }
 
   // 2. Update auth.users user_metadata
   // Only update if there's something to update in metadata (name or avatar)
   if (Object.keys(updatesForAuthUser).length > 0) {
     const { error: authUpdateError } = await supabase.auth.updateUser({
-      data: updatesForAuthUser,
+      data: updatesForAuthUser, // This updates user_metadata in auth.users
     });
 
     if (authUpdateError) {
       console.error("Error updating auth user metadata:", authUpdateError);
       // Potentially rollback public.users update or handle inconsistency
-      // For now, we'll report this error but the public.users table might be updated.
       return { success: false, error: `Failed to update auth metadata: ${authUpdateError.message}` };
     }
   }
@@ -80,3 +79,5 @@ export async function updateUserProfile(formData: FormData) {
   revalidatePath("/"); // Revalidate home if it shows user info in header
   return { success: true, message: "Profile updated successfully." };
 }
+
+    
