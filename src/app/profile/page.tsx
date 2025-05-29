@@ -20,7 +20,10 @@ export default async function ProfilePage() {
   const supabase = createSupabaseServerClient();
   const { data: { user: authUser } } = await supabase.auth.getUser();
 
+  console.log('[ProfilePage Server Component] authUser state:', authUser ? `User ID: ${authUser.id}` : 'No authUser found');
+
   if (!authUser) {
+    console.log('[ProfilePage Server Component] Redirecting to login because authUser is null.');
     redirect('/auth/login?next=/profile');
   }
 
@@ -37,12 +40,12 @@ export default async function ProfilePage() {
       contribution_points
     `)
     .eq('id', authUser.id)
-    .maybeSingle<Tables<'users'>['Row'] & { bio?: string | null }>(); // Use maybeSingle
+    .maybeSingle<Tables<'users'>['Row'] & { bio?: string | null; avatar_url?: string | null }>(); // Ensure avatar_url is in select and type
 
   let currentUser: User;
 
   if (profileError) {
-    console.error('Error fetching user profile from public.users:', profileError.message);
+    console.error('[ProfilePage Server Component] Error fetching user profile from public.users:', profileError.message);
     // Do not redirect to login if authUser exists. Construct currentUser with authUser data.
   }
 
@@ -51,7 +54,7 @@ export default async function ProfilePage() {
       id: userProfileData.id,
       name: userProfileData.full_name,
       email: userProfileData.email,
-      avatarUrl: userProfileData.avatar_url,
+      avatarUrl: userProfileData.avatar_url, // Use avatar_url from public.users
       bio: userProfileData.bio,
       role: userProfileData.role,
       contributionPoints: userProfileData.contribution_points,
@@ -59,13 +62,13 @@ export default async function ProfilePage() {
   } else {
     // If userProfileData is null (either due to an error handled above or no record found),
     // construct currentUser with data from authUser and defaults.
-    console.warn(`No public.users record found for user ID: ${authUser.id}. Using fallback data.`);
+    console.warn(`[ProfilePage Server Component] No public.users record found for user ID: ${authUser.id}. Using fallback data.`);
     currentUser = {
       id: authUser.id,
       name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
       email: authUser.email,
-      avatarUrl: authUser.user_metadata?.avatar_url || null,
-      bio: authUser.user_metadata?.bio || null,
+      avatarUrl: authUser.user_metadata?.avatar_url || null, // Fallback to auth.users metadata
+      bio: (authUser.user_metadata?.bio as string) || null, // Explicitly cast bio if needed
       role: 'User', // Default role
       contributionPoints: 0, // Default points
     };
@@ -86,10 +89,10 @@ export default async function ProfilePage() {
     .eq('user_id', authUser.id);
 
   if (badgesError) {
-    console.error("Error fetching user badges:", badgesError.message);
+    console.error("[ProfilePage Server Component] Error fetching user badges:", badgesError.message);
   }
   const userBadges: UserBadge[] = badgesData?.map(ub => ({
-    id: ub.badges!.id, // Non-null assertion as it's an inner join conceptually
+    id: ub.badges!.id, 
     name: ub.badges!.name,
     description: ub.badges!.description,
     icon_asset_id: ub.badges!.icon_asset_id,
@@ -103,12 +106,11 @@ export default async function ProfilePage() {
     .select('id, entity_type, proposed_data, status, created_at, change_reason')
     .eq('proposer_id', authUser.id)
     .order('created_at', { ascending: false })
-    .limit(10); // Example: Get latest 10 contributions
+    .limit(10); 
 
    if (contributionsError) {
-    console.error("Error fetching user contributions:", contributionsError.message);
+    console.error("[ProfilePage Server Component] Error fetching user contributions:", contributionsError.message);
   }
-  // Ensure proposed_data is parsed if it's a JSON string, or handle as is if it's already an object
   const userContributions: UserContribution[] = contributionsData?.map(c => ({
     ...c,
     proposed_data: typeof c.proposed_data === 'string' ? JSON.parse(c.proposed_data) : c.proposed_data,
@@ -134,8 +136,6 @@ export default async function ProfilePage() {
               )}
           </div>
         </div>
-        {/* Logout button can be part of a dropdown or directly here in a real app if header doesn't have it */}
-        {/* <form action="/auth/signout" method="post"> <Button variant="outline" type="submit"> <LogOut className="mr-2 h-4 w-4" /> Logout </Button> </form> */}
       </div>
       
       {currentUser.bio && (
@@ -182,7 +182,6 @@ export default async function ProfilePage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {userBadges.map((badge) => (
                 <div key={badge.id} className="flex flex-col items-center text-center p-3 border rounded-lg hover:shadow-md transition-shadow">
-                  {/* Placeholder for badge icon - replace with actual icon logic */}
                   <Award className="h-12 w-12 text-yellow-500 mb-2" data-ai-hint="award trophy" />
                   <p className="font-semibold text-sm">{badge.name}</p>
                   <p className="text-xs text-muted-foreground">{badge.description}</p>
@@ -209,7 +208,6 @@ export default async function ProfilePage() {
                   <div className="flex justify-between items-start">
                     <p className="font-medium">
                       Edit to {contrib.entity_type}
-                      {/* You might want to display more info about the entity if available in proposed_data */}
                     </p>
                     <span className={`px-2 py-0.5 text-xs rounded-full ${
                       contrib.status === 'Approved' ? 'bg-green-100 text-green-700' :
@@ -223,10 +221,6 @@ export default async function ProfilePage() {
                   <p className="text-xs text-muted-foreground mt-1">
                     Submitted: {new Date(contrib.created_at).toLocaleString()}
                   </p>
-                  {/* Optionally, display a snippet of proposed_data */}
-                  {/* <pre className="mt-2 text-xs bg-muted p-2 rounded-md overflow-x-auto">
-                    {JSON.stringify(contrib.proposed_data, null, 2)}
-                  </pre> */}
                 </li>
               ))}
             </ul>
@@ -235,9 +229,8 @@ export default async function ProfilePage() {
           )}
         </CardContent>
       </Card>
-       {/* Existing Logout button, moved from original profile page to keep it simple and avoid context complexities here */}
       <Card className="max-w-2xl mx-auto mt-6">
-        <CardContent className="pt-6"> {/* Add padding top if CardHeader is removed */}
+        <CardContent className="pt-6">
             <form action="/auth/logout" method="post" className="w-full">
                 <Button variant="destructive" className="w-full justify-center" type="submit">
                     <LogOut className="mr-2 h-4 w-4" /> Log Out
@@ -248,5 +241,3 @@ export default async function ProfilePage() {
     </div>
   );
 }
-
-    
