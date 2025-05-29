@@ -1,208 +1,234 @@
 
-"use client";
-
-import { useAuth } from '@/contexts/auth-context';
-import { Button } from '@/components/ui/button';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { redirect } from 'next/navigation';
+import type { User, UserBadge, UserContribution } from '@/types/entities';
+import type { Database, Tables } from '@/types/supabase';
+import { ProfileForm } from '@/components/profile/ProfileForm';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { LogOut, UserCircle, Edit, ShieldCheck, Award, Activity, Save } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { updateUserProfile } from '@/lib/actions/user.actions';
-import { useToast } from '@/hooks/use-toast';
-import { useState, useEffect } } from 'react';
+import { Award, Edit3, FileText, LogOut, ShieldCheck, UserCircle, Activity } from 'lucide-react';
+import { Button } from '@/components/ui/button'; // For logout button
+import Link from 'next/link'; // For edit button link if preferred
 
-const profileSchema = z.object({
-  fullName: z.string().min(2, { message: "Full name must be at least 2 characters." }),
-  avatarUrl: z.string().url({ message: "Please enter a valid URL."}).or(z.literal("")).optional(),
-});
-type ProfileFormValues = z.infer<typeof profileSchema>;
+// Helper function to get user initials
+const getInitials = (name?: string | null) => {
+  if (!name) return 'U';
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) || 'U';
+};
 
-export default function ProfilePage() {
-  const { user, isAuthenticated, logout, isLoading: authIsLoading } = useAuth();
-  const { toast } = useToast();
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+export default async function ProfilePage() {
+  const supabase = createSupabaseServerClient();
+  const { data: { user: authUser } } = await supabase.auth.getUser();
 
-  const form = useForm<ProfileFormValues>({
-    resolver: zodResolver(profileSchema),
-    defaultValues: {
-      fullName: user?.name || '',
-      avatarUrl: user?.avatarUrl || '',
-    },
-  });
-
-  useEffect(() => {
-    if (user) {
-      form.reset({
-        fullName: user.name || '',
-        avatarUrl: user.avatarUrl || '',
-      });
-    }
-  }, [user, form]);
-
-  const getInitials = (name?: string | null) => {
-    if (!name) return 'U';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) || 'U';
+  if (!authUser) {
+    redirect('/auth/login?next=/profile');
   }
 
-  const handleEditProfile = async (data: ProfileFormValues) => {
-    setIsSubmitting(true);
-    const formData = new FormData();
-    formData.append('fullName', data.fullName);
-    formData.append('avatarUrl', data.avatarUrl || '');
+  // Fetch detailed user profile from public.users
+  const { data: userProfileData, error: profileError } = await supabase
+    .from('users')
+    .select(`
+      id,
+      full_name,
+      email,
+      avatar_url,
+      bio,
+      role,
+      contribution_points
+    `)
+    .eq('id', authUser.id)
+    .single<Tables<'users'>['Row'] & { bio?: string | null }>(); // Add bio to the type
 
-    const result = await updateUserProfile(formData);
-    setIsSubmitting(false);
-
-    if (result.success) {
-      toast({ title: "Profile Updated", description: result.message });
-      setIsEditing(false);
-      // AuthContext will eventually update via onAuthStateChange USER_UPDATED event
-    } else {
-      toast({ 
-        title: "Update Failed", 
-        description: result.error || "Could not update profile.", 
-        variant: "destructive",
-        // @ts-ignore // TODO: Fix this type error if details exist
-        details: result.details 
-      });
-    }
-  };
-
-  if (authIsLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-1/3 mb-4" /> {/* Title skeleton */}
-        <Card className="max-w-2xl mx-auto">
-          <CardHeader className="items-center text-center">
-            <Skeleton className="h-24 w-24 rounded-full mb-4" />
-            <Skeleton className="h-6 w-40 mb-2" />
-            <Skeleton className="h-4 w-52" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </CardContent>
-        </Card>
-        <Card className="max-w-2xl mx-auto mt-6">
-           <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader>
-           <CardContent><Skeleton className="h-20 w-full" /></CardContent>
-        </Card>
-      </div>
-    );
+  if (profileError || !userProfileData) {
+    console.error('Error fetching user profile:', profileError?.message);
+    // Potentially redirect to an error page or show a message
+    // For now, we'll try to construct a minimal user object or redirect
+    redirect('/auth/login?error=profile_fetch_failed'); 
   }
   
-  if (!isAuthenticated || !user) {
-    // This case should ideally be handled by middleware redirecting to /auth/login
-    return (
-      <div className="space-y-6 text-center py-12">
-        <UserCircle className="h-24 w-24 mx-auto text-muted-foreground mb-4" />
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Profile</h1>
-        <p className="text-muted-foreground">You are not logged in.</p>
-        <p className="text-sm">Please log in to view your profile.</p>
-      </div>
-    );
+  // Construct the User object for the ProfileForm and display
+  const currentUser: User = {
+    id: userProfileData.id,
+    name: userProfileData.full_name,
+    email: userProfileData.email, // email from users table (synced by trigger)
+    avatarUrl: userProfileData.avatar_url,
+    bio: userProfileData.bio,
+    role: userProfileData.role,
+    contributionPoints: userProfileData.contribution_points,
+  };
+
+  // Fetch user badges (joining user_badges with badges table)
+  const { data: badgesData, error: badgesError } = await supabase
+    .from('user_badges')
+    .select(`
+      awarded_at,
+      badges (
+        id,
+        name,
+        description,
+        icon_asset_id
+      )
+    `)
+    .eq('user_id', authUser.id);
+
+  if (badgesError) {
+    console.error("Error fetching user badges:", badgesError.message);
   }
+  const userBadges: UserBadge[] = badgesData?.map(ub => ({
+    id: ub.badges!.id, // Non-null assertion as it's an inner join conceptually
+    name: ub.badges!.name,
+    description: ub.badges!.description,
+    icon_asset_id: ub.badges!.icon_asset_id,
+    awarded_at: ub.awarded_at,
+  })) || [];
+
+
+  // Fetch user contributions (from pending_edits)
+  const { data: contributionsData, error: contributionsError } = await supabase
+    .from('pending_edits')
+    .select('id, entity_type, proposed_data, status, created_at, change_reason')
+    .eq('proposer_id', authUser.id)
+    .order('created_at', { ascending: false })
+    .limit(10); // Example: Get latest 10 contributions
+
+   if (contributionsError) {
+    console.error("Error fetching user contributions:", contributionsError.message);
+  }
+  // Ensure proposed_data is parsed if it's a JSON string, or handle as is if it's already an object
+  const userContributions: UserContribution[] = contributionsData?.map(c => ({
+    ...c,
+    proposed_data: typeof c.proposed_data === 'string' ? JSON.parse(c.proposed_data) : c.proposed_data,
+  })) || [];
+
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">My Profile</h1>
-        {!isEditing && (
-           <Button variant="outline" onClick={() => setIsEditing(true)}>
-             <Edit className="mr-2 h-4 w-4" /> Edit Profile
-           </Button>
-        )}
-      </div>
-      
-      <Card className="max-w-2xl mx-auto shadow-lg rounded-xl">
-        <form onSubmit={form.handleSubmit(handleEditProfile)}>
-          <CardHeader className="items-center text-center">
-            <Avatar className="h-24 w-24 mb-4 ring-2 ring-primary ring-offset-2 ring-offset-background">
-              <AvatarImage src={form.watch('avatarUrl') || user.avatarUrl || ''} alt={user.name || 'User'} data-ai-hint="profile picture" />
-              <AvatarFallback className="text-3xl">{getInitials(form.watch('fullName') || user.name)}</AvatarFallback>
-            </Avatar>
-            {isEditing ? (
-              <div className='w-full px-6 space-y-1'>
-                 <Label htmlFor="fullName" className='sr-only'>Full Name</Label>
-                 <Input id="fullName" {...form.register("fullName")} placeholder="Full Name" className="text-2xl font-semibold text-center h-auto p-1" />
-                 {form.formState.errors.fullName && <p className="text-sm text-destructive text-center">{form.formState.errors.fullName.message}</p>}
-                
-                 <Label htmlFor="avatarUrl" className='sr-only'>Avatar URL</Label>
-                 <Input id="avatarUrl" {...form.register("avatarUrl")} placeholder="Avatar URL (e.g., https://...)" className="text-xs text-center h-auto p-1"/>
-                 {form.formState.errors.avatarUrl && <p className="text-sm text-destructive text-center">{form.formState.errors.avatarUrl.message}</p>}
-              </div>
-            ) : (
-              <>
-                <CardTitle className="text-2xl">{user.name}</CardTitle>
-                <CardDescription>{user.email}</CardDescription>
-              </>
-            )}
-              {user.role && (
-                <div className="mt-2 flex items-center text-sm text-muted-foreground">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center gap-4">
+           <Avatar className="h-16 w-16 sm:h-20 sm:w-20 border-2 border-primary">
+            <AvatarImage src={currentUser.avatarUrl || undefined} alt={currentUser.name || 'User'} data-ai-hint="profile page avatar" />
+            <AvatarFallback className="text-2xl sm:text-3xl">{getInitials(currentUser.name)}</AvatarFallback>
+          </Avatar>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">{currentUser.name}</h1>
+            <p className="text-muted-foreground">{currentUser.email}</p>
+             {currentUser.role && (
+                <div className="mt-1 flex items-center text-sm text-muted-foreground">
                   <ShieldCheck className="mr-1.5 h-4 w-4 text-primary" />
-                  Role: {user.role}
+                  Role: {currentUser.role}
                 </div>
               )}
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isEditing ? (
-              <div className="flex gap-2 justify-center">
-                <Button type="button" variant="outline" onClick={() => {setIsEditing(false); form.reset({fullName: user.name || '', avatarUrl: user.avatarUrl || ''});}}>Cancel</Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  <Save className="mr-2 h-4 w-4" /> Save Changes
-                </Button>
-              </div>
-            ) : (
-               <Button onClick={logout} variant="destructive" className="w-full justify-start">
-                <LogOut className="mr-2 h-4 w-4" /> Log Out
-              </Button>
-            )}
-          </CardContent>
-        </form>
+          </div>
+        </div>
+        {/* Logout button can be part of a dropdown or directly here in a real app if header doesn't have it */}
+        {/* <form action="/auth/signout" method="post"> <Button variant="outline" type="submit"> <LogOut className="mr-2 h-4 w-4" /> Logout </Button> </form> */}
+      </div>
+      
+      {currentUser.bio && (
+        <Card>
+          <CardHeader><CardTitle>About Me</CardTitle></CardHeader>
+          <CardContent><p className="text-muted-foreground whitespace-pre-wrap">{currentUser.bio}</p></CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center"><Edit3 className="mr-2 h-5 w-5 text-primary" /> Edit Profile</CardTitle>
+          <CardDescription>Update your personal information and avatar.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ProfileForm currentUser={currentUser} />
+        </CardContent>
       </Card>
 
-      <Card className="max-w-2xl mx-auto">
+      <Card>
         <CardHeader>
           <CardTitle>Account Statistics</CardTitle>
           <CardDescription>Your activity and achievements on Netrika.</CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-6 text-center">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-center">
             <div>
-                <p className="text-3xl font-bold text-primary">{user.contributionPoints ?? 0}</p>
+                <p className="text-3xl font-bold text-primary">{currentUser.contributionPoints ?? 0}</p>
                 <p className="text-sm text-muted-foreground">Contribution Points</p>
             </div>
-            <div> {/* Placeholder for badges count */}
-                <p className="text-3xl font-bold">0</p> 
+            <div>
+                <p className="text-3xl font-bold">{userBadges.length}</p> 
                 <p className="text-sm text-muted-foreground">Badges Earned</p>
             </div>
-            {/* Other stats from old profile page - can be re-added if data source exists */}
         </CardContent>
       </Card>
 
-      <Card className="max-w-2xl mx-auto">
+      <Card>
         <CardHeader>
-          <CardTitle className="flex items-center"><Award className="mr-2 h-5 w-5 text-primary" /> User Badges (Coming Soon)</CardTitle>
-          <CardDescription>Badges you&apos;ve earned for your contributions.</CardDescription>
+          <CardTitle className="flex items-center"><Award className="mr-2 h-5 w-5 text-primary" /> My Badges</CardTitle>
+          <CardDescription>Badges you've earned for your contributions.</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">No badges earned yet, or this feature is under development.</p>
+          {userBadges.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {userBadges.map((badge) => (
+                <div key={badge.id} className="flex flex-col items-center text-center p-3 border rounded-lg hover:shadow-md transition-shadow">
+                  {/* Placeholder for badge icon - replace with actual icon logic */}
+                  <Award className="h-12 w-12 text-yellow-500 mb-2" data-ai-hint="award trophy" />
+                  <p className="font-semibold text-sm">{badge.name}</p>
+                  <p className="text-xs text-muted-foreground">{badge.description}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Awarded: {new Date(badge.awarded_at).toLocaleDateString()}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No badges earned yet. Keep contributing!</p>
+          )}
         </CardContent>
       </Card>
 
-      <Card className="max-w-2xl mx-auto">
+      <Card>
         <CardHeader>
-          <CardTitle className="flex items-center"><Activity className="mr-2 h-5 w-5 text-primary" /> My Contributions (Coming Soon)</CardTitle>
-          <CardDescription>A log of your edits and other activities on Netrika.</CardDescription>
+          <CardTitle className="flex items-center"><Activity className="mr-2 h-5 w-5 text-primary" /> My Contributions</CardTitle>
+          <CardDescription>A log of your recent proposed edits and their status.</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">Your contribution history will appear here.</p>
+          {userContributions.length > 0 ? (
+            <ul className="space-y-4">
+              {userContributions.map((contrib) => (
+                <li key={contrib.id} className="p-4 border rounded-lg hover:shadow-sm transition-shadow">
+                  <div className="flex justify-between items-start">
+                    <p className="font-medium">
+                      Edit to {contrib.entity_type}
+                      {/* You might want to display more info about the entity if available in proposed_data */}
+                    </p>
+                    <span className={`px-2 py-0.5 text-xs rounded-full ${
+                      contrib.status === 'Approved' ? 'bg-green-100 text-green-700' :
+                      contrib.status === 'Denied' ? 'bg-red-100 text-red-700' :
+                      'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {contrib.status}
+                    </span>
+                  </div>
+                  {contrib.change_reason && <p className="text-sm text-muted-foreground mt-1">Reason: {contrib.change_reason}</p>}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Submitted: {new Date(contrib.created_at).toLocaleString()}
+                  </p>
+                  {/* Optionally, display a snippet of proposed_data */}
+                  {/* <pre className="mt-2 text-xs bg-muted p-2 rounded-md overflow-x-auto">
+                    {JSON.stringify(contrib.proposed_data, null, 2)}
+                  </pre> */}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-muted-foreground">You haven't made any contributions yet, or they are still under review.</p>
+          )}
+        </CardContent>
+      </Card>
+       {/* Existing Logout button, moved from original profile page to keep it simple and avoid context complexities here */}
+      <Card className="max-w-2xl mx-auto mt-6">
+        <CardContent className="pt-6"> {/* Add padding top if CardHeader is removed */}
+            <form action="/auth/logout" method="post" className="w-full">
+                <Button variant="destructive" className="w-full justify-center" type="submit">
+                    <LogOut className="mr-2 h-4 w-4" /> Log Out
+                </Button>
+            </form>
         </CardContent>
       </Card>
     </div>
