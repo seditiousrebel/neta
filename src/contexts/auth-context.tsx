@@ -16,7 +16,6 @@ interface AuthContextType {
   isLoading: boolean;
   logout: () => Promise<void>;
   supabase: SupabaseClient;
-  // Removed modal state managers
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,14 +28,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
 
   const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
+    // Select all columns, but be aware if some don't exist (like avatar_url or bio)
     const { data, error } = await supabase
       .from('users')
-      .select('*')
+      .select('*') 
       .eq('id', userId)
-      .maybeSingle(); // Changed from .single() to .maybeSingle()
+      .maybeSingle(); 
     if (error) {
-      // This will now primarily log if multiple rows are found, or other unexpected db errors.
-      // "No rows found" will not be an error with maybeSingle(), data will be null.
       console.error('Error fetching user profile:', error.message);
       return null;
     }
@@ -53,11 +51,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         id: authUser.id,
         email: authUser.email,
         name: userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
-        // Prefer avatar_url from public.users, then user_metadata, then placeholder
-        avatarUrl: userProfile?.avatar_url || authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${(userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email || 'U').charAt(0).toUpperCase()}`,
-        role: userProfile?.role || 'User', // Default to 'User' if not found
+        // Prefer avatar_url from auth metadata, then placeholder
+        avatarUrl: authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${(userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email || 'U').charAt(0).toUpperCase()}`,
+        // Prefer bio from auth metadata, then null
+        bio: (authUser.user_metadata?.bio as string) || userProfile?.bio || null,
+        role: userProfile?.role || 'User', 
         contributionPoints: userProfile?.contribution_points || 0,
-        bio: userProfile?.bio // Make sure bio is included
       };
       setUser(appUser);
       setIsAuthenticated(true);
@@ -67,7 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     setIsLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase]); // Removed toast from dependencies as it was causing re-renders
+  }, [supabase]); 
 
   useEffect(() => {
     setIsLoading(true);
@@ -75,11 +74,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       async (event: AuthChangeEvent, session: SupabaseSession | null) => {
         await processSession(session);
          if (event === 'SIGNED_IN') {
-          // Could add a welcome toast here if desired, but login/register pages will handle redirects
         } else if (event === 'SIGNED_OUT') {
-          // setUser(null); setIsAuthenticated(false); // Already handled by processSession
         } else if (event === 'USER_UPDATED') {
-          // Refetch profile if user metadata changed from server
            if (session?.user) await processSession(session);
         }
       }
@@ -103,12 +99,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error) {
       console.error('Logout error:', error.message);
       toast({ title: "Logout Failed", description: error.message, variant: "destructive" });
-    } else {
-      // Toast is optional here as user will be redirected or UI will update
-      // toast({ title: "Logged Out", description: "You have been successfully logged out." });
     }
-    // onAuthStateChange will handle setting user to null and isAuthenticated to false, and isLoading to false.
-    // Explicitly set to false to speed up UI update before potential redirect
     setUser(null);
     setIsAuthenticated(false);
     setIsLoading(false);
@@ -134,4 +125,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-

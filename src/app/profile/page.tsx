@@ -28,25 +28,23 @@ export default async function ProfilePage() {
   }
 
   // Fetch detailed user profile from public.users
-  // Removed avatar_url from this select statement
+  // Removed avatar_url and bio from this select statement
   const { data: userProfileData, error: profileError } = await supabase
     .from('users')
     .select(`
       id,
       full_name,
       email,
-      bio,
       role,
       contribution_points
     `)
     .eq('id', authUser.id)
-    .maybeSingle<Omit<Tables<'users'>['Row'], 'avatar_url'> & { bio?: string | null }>(); // Adjusted type to reflect avatar_url removal for this query
+    .maybeSingle<Omit<Tables<'users'>['Row'], 'avatar_url' | 'bio'>>();
 
   let currentUser: User;
 
   if (profileError) {
     console.error('[ProfilePage Server Component] Error fetching user profile from public.users:', profileError.message);
-    // Do not redirect to login if authUser exists. Construct currentUser with authUser data.
   }
 
   if (userProfileData) {
@@ -54,28 +52,24 @@ export default async function ProfilePage() {
       id: userProfileData.id,
       name: userProfileData.full_name,
       email: userProfileData.email,
-      // Avatar primarily from auth.users.user_metadata, then placeholder
       avatarUrl: authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${getInitials(userProfileData.full_name)}`,
-      bio: userProfileData.bio,
+      bio: (authUser.user_metadata?.bio as string) || null, // Get bio from auth metadata
       role: userProfileData.role,
       contributionPoints: userProfileData.contribution_points,
     };
   } else {
-    // If userProfileData is null (either due to an error handled above or no record found),
-    // construct currentUser with data from authUser and defaults.
     console.warn(`[ProfilePage Server Component] No public.users record found for user ID: ${authUser.id}. Using fallback data.`);
     currentUser = {
       id: authUser.id,
       name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
       email: authUser.email,
       avatarUrl: authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${getInitials(authUser.user_metadata?.full_name || authUser.email)}`,
-      bio: (authUser.user_metadata?.bio as string) || null,
-      role: 'User', // Default role
-      contributionPoints: 0, // Default points
+      bio: (authUser.user_metadata?.bio as string) || null, // Get bio from auth metadata
+      role: 'User', 
+      contributionPoints: 0,
     };
   }
   
-  // Fetch user badges (joining user_badges with badges table)
   const { data: badgesData, error: badgesError } = await supabase
     .from('user_badges')
     .select(`
@@ -101,7 +95,6 @@ export default async function ProfilePage() {
   })) || [];
 
 
-  // Fetch user contributions (from pending_edits)
   const { data: contributionsData, error: contributionsError } = await supabase
     .from('pending_edits')
     .select('id, entity_type, proposed_data, status, created_at, change_reason')
@@ -230,17 +223,7 @@ export default async function ProfilePage() {
           )}
         </CardContent>
       </Card>
-      <Card className="max-w-2xl mx-auto mt-6">
-        <CardContent className="pt-6">
-            <form action="/auth/logout" method="post" className="w-full">
-                <Button variant="destructive" className="w-full justify-center" type="submit">
-                    <LogOut className="mr-2 h-4 w-4" /> Log Out
-                </Button>
-            </form>
-        </CardContent>
-      </Card>
+      {/* Removed the standalone Logout button Card */}
     </div>
   );
 }
-
-    
