@@ -7,7 +7,6 @@ export interface User {
   bio?: string | null; // From public.users.bio
   role?: "User" | "Admin" | string | null; // Role from public.users
   contributionPoints?: number | null; // From public.users
-  // Assuming user_badges and contributions will be fetched separately
 }
 
 export type EntityType = "politician" | "party" | "promise" | "bill";
@@ -75,3 +74,66 @@ export interface UserContribution {
   created_at: string;
   change_reason?: string | null;
 }
+
+
+// Politician Directory Types
+export type PoliticianPhoto = {
+  storage_path: string | null;
+};
+
+export type PoliticianPartyForCard = {
+  id: number;
+  name: string;
+  abbreviation: string | null;
+  media_assets?: PoliticianPhoto | null; 
+};
+
+export type PoliticianPartyMembershipForCard = {
+  is_active: boolean;
+  parties: PoliticianPartyForCard | null; 
+};
+
+export type PoliticianPositionTitleForCard = {
+  id: number;
+  title: string;
+};
+
+export type PoliticianPositionForCard = {
+  is_current: boolean;
+  position_titles: PoliticianPositionTitleForCard | null; 
+};
+
+export type PoliticianRatingForCard = {
+  vote_score: number | null;
+};
+
+// This is the main type for items in the politician directory list
+export type PoliticianCardData = {
+  id: number;
+  name: string;
+  bio: string | null;
+  fts_vector?: any; 
+  media_assets: PoliticianPhoto | null; // For politician's main photo (direct relation from politicians.photo_asset_id)
+  party_memberships: PoliticianPartyMembershipForCard[]; 
+  politician_positions: PoliticianPositionForCard[]; 
+  politician_ratings: PoliticianRatingForCard[] | null; 
+  is_followed_by_user?: boolean;
+};
+
+// For filter dropdowns
+export interface PartyFilterOption {
+  id: number;
+  name: string;
+}
+
+export interface ProvinceFilterOption {
+  id: number; 
+  name: string;
+}
+
+export type PoliticianFiltersState = {
+  partyId?: string | null;
+  provinceId?: string | null;
+  searchTerm?: string | null;
+};
+
