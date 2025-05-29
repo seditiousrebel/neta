@@ -39,23 +39,26 @@ const mainNavItems: NavItem[] = [
   { id: 'notifications', href: '/notifications', label: 'Notifications', icon: Bell, requiresAuth: true, badgeCount: 3 }, // Placeholder badge
 ];
 
-const accountNavItem = (isAuthenticated: boolean, user: ReturnType<typeof useAuth>['user']): NavItem => 
-  isAuthenticated && user
-    ? { id: 'profile', href: '/profile', label: user.name || 'Profile', icon: User }
-    : { id: 'login', href: '/auth/login', label: 'Login / Sign Up', icon: LogIn };
+// This function is now only used to define the shape for an authenticated user in the footer
+const accountProfileItem = (user: ReturnType<typeof useAuth>['user']): NavItem => ({
+  id: 'profile',
+  href: '/profile',
+  label: user?.name || 'Profile',
+  icon: User,
+});
 
 
 export function SideNav() {
   const pathname = usePathname();
   const { isAuthenticated, user, isLoading: authIsLoading } = useAuth();
-  const notificationCount = 3; // Placeholder
+  // const notificationCount = 3; // Placeholder - already exists in mainNavItems
 
   const getInitials = (name?: string | null) => {
     if (!name) return 'U';
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
   };
 
-  const currentAccountItem = accountNavItem(isAuthenticated, user);
+  const currentProfileDetails = isAuthenticated && user ? accountProfileItem(user) : null;
 
   const allNavItems = [
     ...mainNavItems.filter(item => !item.requiresAuth || isAuthenticated),
@@ -107,30 +110,32 @@ export function SideNav() {
                 <Skeleton className="h-3 w-28" />
               </div>
             </div>
-          ) : (
+          ) : isAuthenticated && user && currentProfileDetails ? (
             <SidebarMenuButton
               asChild
-              isActive={pathname.startsWith(currentAccountItem.href)}
+              isActive={pathname.startsWith(currentProfileDetails.href)}
               className="justify-start w-full"
-              tooltip={{ children: currentAccountItem.label, side: 'right', align: 'center' }}
+              tooltip={{ children: currentProfileDetails.label, side: 'right', align: 'center' }}
             >
-              <Link href={currentAccountItem.href} className="flex items-center gap-3">
-                {isAuthenticated && user ? (
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={user.avatarUrl || undefined} alt={user.name || 'User'} data-ai-hint="user avatar" />
-                      <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
-                    </Avatar>
-                ) : (
-                  <LogIn className="h-5 w-5" />
-                )}
+              <Link href={currentProfileDetails.href} className="flex items-center gap-3">
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={user.avatarUrl || undefined} alt={user.name || 'User'} data-ai-hint="user avatar" />
+                  <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                </Avatar>
                 <div className="group-data-[collapsible=icon]:hidden overflow-hidden">
-                  <span className="block truncate font-medium">{currentAccountItem.label}</span>
-                  {isAuthenticated && user?.email && (
+                  <span className="block truncate font-medium">{currentProfileDetails.label}</span>
+                  {user.email && (
                     <span className="block truncate text-xs text-sidebar-foreground/70">{user.email}</span>
                   )}
                 </div>
               </Link>
             </SidebarMenuButton>
+          ) : (
+            // If not loading and not authenticated, display nothing in the footer user slot.
+            // The Header component handles the main login/signup CTA.
+            // You could put a placeholder here if desired, e.g., a generic app icon or empty space.
+            // For now, it will be empty, making the footer potentially shorter when logged out.
+            <div className="h-[52px] group-data-[collapsible=icon]:h-12"></div> // Placeholder to maintain footer height similar to logged-in state
           )}
       </SidebarFooter>
     </Sidebar>
