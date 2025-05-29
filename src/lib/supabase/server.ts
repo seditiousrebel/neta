@@ -1,12 +1,13 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import type { Database } from '@/types/supabase'; // Ensure this path is correct
 
 // Define a function to create a Supabase client for server-side operations
 // This can be used in Server Components, Route Handlers, and Server Actions
 export function createSupabaseServerClient() {
   const cookieStore = cookies();
 
-  return createServerClient(
+  return createServerClient<Database>( // Specify Database type
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
