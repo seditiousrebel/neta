@@ -9,61 +9,6 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      users: {
-        Row: {
-          id: string 
-          full_name: string | null
-          avatar_url: string | null
-          email: string | null 
-          role: Database["public"]["Enums"]["user_role"]
-          contribution_points: number
-          created_at: string | null
-          updated_at: string | null
-          // Add other columns from your actual 'users' table here
-        }
-        Insert: {
-          id: string
-          full_name?: string | null
-          avatar_url?: string | null
-          email?: string | null
-          role?: Database["public"]["Enums"]["user_role"]
-          contribution_points?: number
-          created_at?: string | null
-          updated_at?: string | null
-          // Add other columns
-        }
-        Update: {
-          id?: string
-          full_name?: string | null
-          avatar_url?: string | null
-          email?: string | null
-          role?: Database["public"]["Enums"]["user_role"]
-          contribution_points?: number
-          created_at?: string | null
-          updated_at?: string | null
-          // Add other columns
-        }
-        Relationships: [
-          {
-            foreignKeyName: "users_id_fkey"
-            columns: ["id"]
-            isOneToOne: true
-            referencedRelation: "users" // In Supabase, auth users are in auth.users
-            referencedColumns: ["id"] // from auth.users table
-          }
-        ]
-      }
-      // Define other tables from your Supabase schema here
-      // For example, if you have a 'posts' table:
-      // posts: {
-      //   Row: { ... }
-      //   Insert: { ... }
-      //   Update: { ... }
-      //   Relationships: [ ... ]
-      // }
-      // This file will be overwritten by `npm run supabase:types`
-      // The structure below is illustrative based on previous context.
-      // The `supabase gen types` command will generate the precise structure.
       badges: {
         Row: {
           created_at: string | null
@@ -1568,6 +1513,36 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id: string
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       promises: {
         Row: {
           created_at: string | null
@@ -1710,6 +1685,47 @@ export type Database = {
           },
         ]
       }
+      users: {
+        Row: {
+          avatar_asset_id: number | null
+          contribution_points: number
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_asset_id?: number | null
+          contribution_points?: number
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_asset_id?: number | null
+          contribution_points?: number
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_avatar_asset_id"
+            columns: ["avatar_asset_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1815,27 +1831,29 @@ export type Database = {
   }
 }
 
-type PublicSchema = Database[Extract<keyof Database, "public">]
+type DefaultSchema = Database[Extract<keyof Database, "public">]
 
 export type Tables<
-  PublicTableNameOrOptions extends
-    | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-        Database[PublicTableNameOrOptions["schema"]]["Views"])
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-      Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] &
-        PublicSchema["Views"])
-    ? (PublicSchema["Tables"] &
-        PublicSchema["Views"])[PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
         Row: infer R
       }
       ? R
@@ -1843,20 +1861,22 @@ export type Tables<
     : never
 
 export type TablesInsert<
-  PublicTableNameOrOptions extends
-    | keyof PublicSchema["Tables"]
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
     | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
     : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
         Insert: infer I
       }
       ? I
@@ -1864,20 +1884,22 @@ export type TablesInsert<
     : never
 
 export type TablesUpdate<
-  PublicTableNameOrOptions extends
-    | keyof PublicSchema["Tables"]
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
     | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
     : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
         Update: infer U
       }
       ? U
@@ -1885,21 +1907,23 @@ export type TablesUpdate<
     : never
 
 export type Enums<
-  PublicEnumNameOrOptions extends
-    | keyof PublicSchema["Enums"]
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
     | { schema: keyof Database },
-  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = PublicEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
-    ? PublicSchema["Enums"][PublicEnumNameOrOptions]
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof PublicSchema["CompositeTypes"]
+    | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof Database },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof Database
@@ -1908,6 +1932,111 @@ export type CompositeTypes<
     : never = never,
 > = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
   ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
-    ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      bill_parliamentary_stage_enum: [
+        "Tabled",
+        "General Discussion",
+        "Clause-wise Discussion",
+        "Committee Deliberation",
+        "Voting",
+        "Passed by House",
+        "Sent to Other House",
+        "Joint Committee",
+        "Presidential Authentication",
+        "Gazetted",
+      ],
+      bill_status: [
+        "Introduced",
+        "In Committee",
+        "Voting",
+        "Passed",
+        "Failed",
+        "Authenticated",
+        "Withdrawn",
+      ],
+      career_entry_type: [
+        "Position Held",
+        "Education",
+        "Political Milestone",
+        "Controversy Involvement",
+        "Award/Recognition",
+        "Other",
+      ],
+      constituency_type: [
+        "Federal House of Representatives",
+        "Provincial Assembly",
+      ],
+      controversy_severity: ["Low", "Moderate", "High", "Critical"],
+      controversy_status_enum: [
+        "Alleged",
+        "Investigating",
+        "Under Trial",
+        "Proven",
+        "Dismissed",
+        "Appealed",
+      ],
+      edit_status: ["Pending", "Approved", "Denied"],
+      election_method: [
+        "FPTP",
+        "PR",
+        "Nominated",
+        "National Assembly Member Election",
+        "By-Election",
+      ],
+      election_type_enum: [
+        "General",
+        "Provincial",
+        "Local",
+        "National Assembly",
+        "By-Election",
+        "Referendum",
+      ],
+      entity_type: [
+        "Politician",
+        "Party",
+        "Promise",
+        "LegislativeBill",
+        "NewsArticle",
+        "Committee",
+        "Constituency",
+        "Controversy",
+        "Election",
+        "PositionTitle",
+      ],
+      gender_enum: ["Male", "Female", "Other"],
+      legislative_body_name: [
+        "House of Representatives",
+        "National Assembly",
+        "Provincial Assembly Bagmati",
+        "Provincial Assembly Gandaki",
+        "Provincial Assembly Karnali",
+        "Provincial Assembly Koshi",
+        "Provincial Assembly Lumbini",
+        "Provincial Assembly Madhesh",
+        "Provincial Assembly Sudurpashchim",
+      ],
+      municipality_type: [
+        "Metropolitan City",
+        "Sub-Metropolitan City",
+        "Municipality",
+        "Rural Municipality",
+      ],
+      promise_status: [
+        "Pending",
+        "In Progress",
+        "Fulfilled",
+        "Broken",
+        "Overdue",
+        "Compromised",
+      ],
+      user_role: ["User", "Admin"],
+      vote_option: ["Yea", "Nay", "Abstain", "Absent"],
+    },
+  },
+} as const
