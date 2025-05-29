@@ -29,7 +29,15 @@ async function fetchInitialPoliticians(
         bio,
         fts_vector,
         media_assets ( storage_path ),
-        party_memberships ( is_active, parties ( id, name, abbreviation, media_assets ( storage_path ) ) ),
+        party_memberships (
+          is_active,
+          parties (
+            id,
+            name,
+            abbreviation,
+            media_assets:media_assets!parties_logo_asset_id_fkey ( storage_path )
+          )
+        ),
         politician_positions ( is_current, position_titles ( id, title ) ),
         politician_ratings ( vote_score )
       `,
@@ -41,11 +49,10 @@ async function fetchInitialPoliticians(
   if (searchTerm) {
     query = query.textSearch('fts_vector', searchTerm, { type: 'plain' });
   }
-  if (partyId && partyId.trim() !== '') { // Ensure partyId is not empty or just whitespace
-    // This assumes you want politicians who have a membership (any, active or not) with this party.
+  if (partyId && partyId.trim() !== '' && partyId !== 'all') { 
     query = query.filter('party_memberships.parties.id', 'eq', partyId);
   }
-  // if (provinceId && provinceId.trim() !== '') {
+  // if (provinceId && provinceId.trim() !== '' && provinceId !== 'all') {
   //   query = query.eq('province_id', provinceId); // Assuming 'province_id' column exists
   // }
 
