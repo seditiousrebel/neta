@@ -23,22 +23,32 @@ import React, { useState } from 'react';
 import { useToast } from "@/hooks/use-toast";
 
 export function Header() {
-  const { isAuthenticated, user, login, logout, isLoading } = useAuth();
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const { 
+    isAuthenticated, 
+    user, 
+    login: performAuthLogin, 
+    logout, 
+    isLoading: authIsLoading,
+    isLoginModalOpen,
+    openLoginModal,
+    closeLoginModal
+  } = useAuth();
+  
   const [username, setUsername] = useState('');
   const { toast } = useToast();
 
   const handleLogin = async () => {
     if (username.trim()) {
       try {
-        await login(username.trim());
+        await performAuthLogin(username.trim());
         // Toast for success/failure is handled within authContext's login
-        setIsLoginModalOpen(false);
+        closeLoginModal(); // Close modal on successful login/signup attempt
         setUsername('');
       } catch (error) {
-        // Error should be handled by authContext's login, but catch here as a fallback
+        // This catch is a fallback, primary error handling (toast) is in authContext.login
         console.error("Login process error in header:", error);
-        toast({ title: "Login Error", description: "An unexpected error occurred.", variant: "destructive" });
+        // toast({ title: "Login Error", description: "An unexpected error occurred.", variant: "destructive" });
+        // Decide if modal should close on error, or allow retry. For now, it stays open.
       }
     } else {
       toast({ title: "Validation Error", description: "Username cannot be empty.", variant: "destructive" });
@@ -46,7 +56,7 @@ export function Header() {
   };
   
   const getInitials = (name?: string | null) => {
-    if (!name) return 'N'; // Default for Netrika or Not logged in
+    if (!name) return 'N'; 
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0,2) || 'U';
   }
 
@@ -58,7 +68,7 @@ export function Header() {
             <NetrikaLogo className="h-8 w-auto" />
           </Link>
           <div className="flex items-center gap-4">
-            {isLoading ? (
+            {authIsLoading ? (
               <Skeleton className="h-10 w-10 rounded-full" />
             ) : isAuthenticated && user ? (
               <DropdownMenu>
@@ -98,7 +108,7 @@ export function Header() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button onClick={() => setIsLoginModalOpen(true)} variant="outline">
+              <Button onClick={openLoginModal} variant="outline">
                 <LogIn className="mr-2 h-4 w-4" />
                 Login / Sign Up
               </Button>
@@ -107,15 +117,15 @@ export function Header() {
         </div>
       </header>
 
-      <Dialog open={isLoginModalOpen} onOpenChange={setIsLoginModalOpen}>
+      <Dialog open={isLoginModalOpen} onOpenChange={(open) => { if (!open) closeLoginModal(); }}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Login or Sign Up</DialogTitle>
             <DialogDescription>
-              Enter a username. If you're new, an account will be created with a default password.
+              Enter a username. If you're new, an account will be created.
               <br />
               <span className="text-xs text-muted-foreground">
-                (Email will be `username@example.com`, password: `password123`. For prototype only.)
+                (Email: `username@example.com`, Password: `password123`. For prototype only.)
               </span>
             </DialogDescription>
           </DialogHeader>
@@ -135,9 +145,9 @@ export function Header() {
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsLoginModalOpen(false)}>Cancel</Button>
-            <Button type="submit" onClick={handleLogin} disabled={!username.trim() || isLoading}>
-              {isLoading ? "Processing..." : "Continue"}
+            <Button type="button" variant="outline" onClick={closeLoginModal}>Cancel</Button>
+            <Button type="submit" onClick={handleLogin} disabled={!username.trim() || authIsLoading}>
+              {authIsLoading ? "Processing..." : "Continue"}
             </Button>
           </DialogFooter>
         </DialogContent>
