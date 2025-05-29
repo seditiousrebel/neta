@@ -1,6 +1,6 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { DetailedPolitician } from '@/types/entities';
+import type { DetailedPolitician, PoliticianCareerEntry } from '@/types/entities'; // Ensure PoliticianCareerEntry is imported
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,10 +19,28 @@ import PromisesSection from '@/components/politicians/detail/PromisesSection';
 
 async function getPoliticianDetails(id: string): Promise<DetailedPolitician | null> {
   const supabase = createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from('politicians')
-    .select(`
-      *,
+  
+  const mainQueryFields = `
+      id,
+      name,
+      name_nepali,
+      is_independent,
+      dob,
+      gender,
+      bio,
+      education,
+      political_journey,
+      public_criminal_records,
+      asset_declarations,
+      twitter_handle,
+      facebook_profile_url,
+      contact_email,
+      contact_phone,
+      permanent_address,
+      current_address,
+      province_id,
+      created_at,
+      updated_at,
       media_assets ( storage_path ),
       party_memberships (
         *,
@@ -35,21 +53,58 @@ async function getPoliticianDetails(id: string): Promise<DetailedPolitician | nu
         *,
         position_titles ( * )
       ),
-      bill_votes!politician_id (
-        *,
-        legislative_bills ( * )
-      ),
-      promises!politician_id ( * ),
-      politician_career_entries!politician_id ( * )
-    `)
+      bill_votes!politician_id ( *, legislative_bills ( * ) ),
+      promises!politician_id ( * )
+  `;
+
+  const fullQueryFields = `${mainQueryFields}, politician_career_entries!politician_id ( * )`;
+
+  let { data: politicianData, error } = await supabase
+    .from('politicians')
+    .select(fullQueryFields)
     .eq('id', id)
-    .maybeSingle<DetailedPolitician>(); // Use maybeSingle for resilience
+    .maybeSingle<DetailedPolitician>();
 
   if (error) {
-    console.error('Error fetching politician details:', error.message, error.details);
-    return null;
+    console.error('Error fetching politician details (initial attempt):', error.message, error.details);
+    // Check if the error is specifically about 'politician_career_entries' relationship
+    if (error.message.includes("Could not find a relationship between 'politicians' and 'politician_career_entries'")) {
+      console.warn("Fallback: Retrying query without 'politician_career_entries' due to relationship error.");
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('politicians')
+        .select(mainQueryFields) // Query without politician_career_entries
+        .eq('id', id)
+        .maybeSingle<Omit<DetailedPolitician, 'politician_career_entries'>>();
+
+      if (fallbackError) {
+        console.error('Error fetching politician details (fallback attempt):', fallbackError.message, fallbackError.details);
+        return null;
+      }
+      if (fallbackData) {
+        // Attempt to fetch career entries separately
+        const { data: careerEntries, error: careerError } = await supabase
+          .from('politician_career_entries')
+          .select('*')
+          .eq('politician_id', id);
+
+        if (careerError) {
+          console.warn("Could not fetch career entries separately:", careerError.message);
+        }
+        // Merge results
+        politicianData = {
+          ...fallbackData,
+          politician_career_entries: (careerEntries as PoliticianCareerEntry[] | null) || [], // Ensure it's an array
+        };
+        // Clear the original error since we have fallback data
+        error = null; 
+      } else {
+        return null; // Politician not found even with fallback
+      }
+    } else {
+      return null; // Different error, return null
+    }
   }
-  return data;
+  return politicianData || null; // return data if no error or if fallback succeeded
 }
 
 export default async function PoliticianDetailPage({ params }: { params: { id: string } }) {
@@ -58,12 +113,7 @@ export default async function PoliticianDetailPage({ params }: { params: { id: s
     console.error(`Invalid politician ID format: ${politicianId}`);
     notFound();
   }
-  const parsedId = parseInt(politicianId, 10);
-  if (isNaN(parsedId)) {
-    console.error(`Parsed politician ID is NaN for: ${politicianId}`);
-    notFound();
-  }
-
+  
   const politician = await getPoliticianDetails(politicianId);
 
   if (!politician) {
@@ -155,3 +205,5 @@ export default async function PoliticianDetailPage({ params }: { params: { id: s
     </div>
   );
 }
+
+    
