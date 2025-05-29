@@ -4,6 +4,7 @@
 import type { PoliticianCareerEntry, PoliticianPosition } from '@/types/entities';
 import { Briefcase, GraduationCap, Milestone, Building } from 'lucide-react'; // Added Building
 import { format } from 'date-fns';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'; // Added this import
 
 interface CareerTimelineProps {
   careerEntries?: PoliticianCareerEntry[];
