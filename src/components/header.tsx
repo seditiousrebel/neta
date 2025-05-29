@@ -14,9 +14,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/auth-context';
-import { LogIn, LogOut, User as UserIcon, Settings, ShieldCheck } from 'lucide-react';
+import { LogIn, LogOut, User as UserIcon, Settings, ShieldCheck, Menu } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-// Removed Dialog related imports as login is now a page
+import { SidebarTrigger } from '@/components/ui/sidebar';
+import { cn } from '@/lib/utils';
 
 export function Header() {
   const { 
@@ -33,12 +34,34 @@ export function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-30 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center" aria-label="Netrika Home">
-            <NetrikaLogo className="h-8 w-auto" />
+          <div className="flex items-center gap-2">
+            {/* SidebarTrigger for desktop collapsing, and for mobile off-canvas if SideNav is configured for it */}
+            <SidebarTrigger className="h-8 w-8 md:hidden group-data-[sidebar-variant=floating]/sidebar-wrapper:md:flex group-data-[sidebar-variant=inset]/sidebar-wrapper:md:flex" />
+             {/* This specific SidebarTrigger setup for md:hidden ensures it's for mobile primarily if sidebar is configured to be off-canvas on mobile.
+                 The shadcn-sidebar itself handles its desktop collapse trigger internally if `collapsible="icon"` is set on <Sidebar />
+                 However, adding a manual trigger here is also fine. Let's simplify the trigger logic.
+                 The SidebarTrigger from ui/sidebar should work universally based on SidebarProvider context.
+             */}
+            <SidebarTrigger className={cn(
+              "h-8 w-8",
+              // Hide if sidebar is not collapsible or if sidebar is 'offcanvas' (mobile sheet) and screen is desktop
+              // "group-data-[sidebar-collapsible=none]/sidebar-wrapper:hidden",
+              // "group-data-[sidebar-collapsible=offcanvas]/sidebar-wrapper:md:hidden" 
+              // For now, let this trigger be for desktop expand/collapse mainly
+            )} />
+
+            <Link href="/" className="hidden items-center sm:flex" aria-label="Netrika Home">
+              <NetrikaLogo className="h-8 w-auto" />
+            </Link>
+          </div>
+          
+          <Link href="/" className="flex items-center sm:hidden" aria-label="Netrika Home"> {/* Mobile Logo */}
+            <NetrikaLogo className="h-7 w-auto" />
           </Link>
-          <div className="flex items-center gap-4">
+
+          <div className="flex items-center gap-2 sm:gap-4">
             {authIsLoading ? (
               <Skeleton className="h-10 w-10 rounded-full" />
             ) : isAuthenticated && user ? (
@@ -84,17 +107,16 @@ export function Header() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" size="sm">
                 <Link href="/auth/login">
-                  <LogIn className="mr-2 h-4 w-4" />
-                  Login / Sign Up
+                  <LogIn className="mr-0 h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Login / Sign Up</span>
                 </Link>
               </Button>
             )}
           </div>
         </div>
       </header>
-      {/* Login Dialog removed, login is now a dedicated page */}
     </>
   );
 }
