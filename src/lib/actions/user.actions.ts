@@ -35,20 +35,22 @@ export async function updateUserProfile(formData: FormData) {
   const { fullName, bio, newAvatarUrl } = validation.data;
   
   // Updates for public.users table.
-  // We only update full_name here. Bio and avatar_url are not assumed to be in public.users
-  const updatesForPublicUser: { full_name: string; } = {
+  const updatesForPublicUser: { full_name: string; bio?: string | null; avatar_url?: string | null; } = {
     full_name: fullName,
   };
+  if (bio !== undefined) updatesForPublicUser.bio = bio; // Add bio if provided
+  if (newAvatarUrl) updatesForPublicUser.avatar_url = newAvatarUrl; // Add newAvatarUrl if provided
 
-  // Updates for auth.users user_metadata. This is where bio and avatar_url are primarily stored.
+
+  // Updates for auth.users user_metadata. Keep this in sync.
   const updatesForAuthUser: { full_name: string; avatar_url?: string | null; bio?: string | null } = {
     full_name: fullName,
   };
   if (newAvatarUrl) updatesForAuthUser.avatar_url = newAvatarUrl;
-  if (bio !== undefined) updatesForAuthUser.bio = bio; // Send bio to auth.users.user_metadata
+  if (bio !== undefined) updatesForAuthUser.bio = bio;
 
 
-  // 1. Update public.users table (only full_name for now, role and points are managed elsewhere)
+  // 1. Update public.users table
   const { error: publicUserUpdateError } = await supabase
     .from("users")
     .update(updatesForPublicUser)
@@ -59,7 +61,8 @@ export async function updateUserProfile(formData: FormData) {
     return { success: false, error: `Failed to update profile details: ${publicUserUpdateError.message}` };
   }
 
-  // 2. Update auth.users user_metadata (full_name, avatar_url, bio)
+  // 2. Update auth.users user_metadata
+  // Only update if there are actual changes for auth metadata to avoid unnecessary updates
   if (Object.keys(updatesForAuthUser).length > 0) {
     const { error: authUpdateError } = await supabase.auth.updateUser({
       data: updatesForAuthUser, 
@@ -67,7 +70,10 @@ export async function updateUserProfile(formData: FormData) {
 
     if (authUpdateError) {
       console.error("Error updating auth user metadata:", authUpdateError);
-      return { success: false, error: `Failed to update auth metadata: ${authUpdateError.message}` };
+      // Note: public.users was updated, but auth.users failed. Decide on rollback strategy or accept inconsistency.
+      // For now, we report success on public.users update but warn about auth metadata.
+      // A more robust solution might involve a transaction if possible, or attempt to revert public.users update.
+      return { success: false, error: `Profile details updated, but failed to update auth metadata: ${authUpdateError.message}` };
     }
   }
 

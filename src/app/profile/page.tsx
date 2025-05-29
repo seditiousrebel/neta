@@ -7,8 +7,8 @@ import { ProfileForm } from '@/components/profile/ProfileForm';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Award, Edit3, FileText, LogOut, ShieldCheck, UserCircle, Activity } from 'lucide-react';
-import { Button } from '@/components/ui/button'; // For logout button
-import Link from 'next/link'; // For edit button link if preferred
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 // Helper function to get user initials
 const getInitials = (name?: string | null) => {
@@ -28,7 +28,7 @@ export default async function ProfilePage() {
   }
 
   // Fetch detailed user profile from public.users
-  // Removed avatar_url and bio from this select statement
+  // Now including avatar_url and bio in the select
   const { data: userProfileData, error: profileError } = await supabase
     .from('users')
     .select(`
@@ -36,10 +36,12 @@ export default async function ProfilePage() {
       full_name,
       email,
       role,
-      contribution_points
+      contribution_points,
+      avatar_url,
+      bio
     `)
     .eq('id', authUser.id)
-    .maybeSingle<Omit<Tables<'users'>['Row'], 'avatar_url' | 'bio'>>();
+    .maybeSingle<Tables<'users'>['Row']>(); // Using full Tables<'users'>['Row'] type
 
   let currentUser: User;
 
@@ -52,21 +54,22 @@ export default async function ProfilePage() {
       id: userProfileData.id,
       name: userProfileData.full_name,
       email: userProfileData.email,
-      avatarUrl: authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${getInitials(userProfileData.full_name)}`,
-      bio: (authUser.user_metadata?.bio as string) || null, // Get bio from auth metadata
+      avatarUrl: userProfileData.avatar_url || authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${getInitials(userProfileData.full_name)}`,
+      bio: userProfileData.bio || (authUser.user_metadata?.bio as string) || null,
       role: userProfileData.role,
       contributionPoints: userProfileData.contribution_points,
     };
   } else {
-    console.warn(`[ProfilePage Server Component] No public.users record found for user ID: ${authUser.id}. Using fallback data.`);
+    // Fallback if public.users record is missing but authUser exists
+    console.warn(`[ProfilePage Server Component] No public.users record found for user ID: ${authUser.id}. Using fallback data from auth.user_metadata.`);
     currentUser = {
       id: authUser.id,
       name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
       email: authUser.email,
       avatarUrl: authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${getInitials(authUser.user_metadata?.full_name || authUser.email)}`,
-      bio: (authUser.user_metadata?.bio as string) || null, // Get bio from auth metadata
-      role: 'User', 
-      contributionPoints: 0,
+      bio: (authUser.user_metadata?.bio as string) || null,
+      role: 'User', // Default role if profile is missing
+      contributionPoints: 0, // Default points
     };
   }
   
@@ -223,7 +226,6 @@ export default async function ProfilePage() {
           )}
         </CardContent>
       </Card>
-      {/* Removed the standalone Logout button Card */}
     </div>
   );
 }
