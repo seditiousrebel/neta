@@ -43,22 +43,19 @@ const fetchPoliticians = async ({
   if (searchTerm) {
     query = query.textSearch('fts_vector', searchTerm, { type: 'plain', config: 'english' });
   }
-  if (partyId) {
-    // This filter means "politicians who have a membership with this party"
-    // This requires party_memberships.party_id to exist and be queryable like this.
-    // More accurately, parties is nested, so it should be party_memberships.parties.id
-    // For Supabase direct filtering on nested relations:
+  if (partyId && partyId.trim() !== '') { // Ensure partyId is not empty or just whitespace
     query = query.filter('party_memberships.parties.id', 'eq', partyId);
   }
-  // if (provinceId) {
+  // if (provinceId && provinceId.trim() !== '') {
   //   query = query.eq('province_id', provinceId); // Assuming 'province_id' column on 'politicians'
   // }
   
   const { data, error, count } = await query;
 
   if (error) {
-    console.error('Error fetching politicians:', error);
-    throw new Error(error.message);
+    console.error('Error fetching politicians (client-side hook). Message:', error.message, 'Details:', error.details);
+    console.error('Full Supabase error object for client-side politicians fetch:', JSON.stringify(error, null, 2));
+    throw new Error(error.message || 'Failed to fetch politicians');
   }
   
   const hasMore = (from + (data?.length || 0)) < (count || 0);

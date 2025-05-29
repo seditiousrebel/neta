@@ -41,19 +41,24 @@ async function fetchInitialPoliticians(
   if (searchTerm) {
     query = query.textSearch('fts_vector', searchTerm, { type: 'plain' });
   }
-  if (partyId) {
+  if (partyId && partyId.trim() !== '') { // Ensure partyId is not empty or just whitespace
     // This assumes you want politicians who have a membership (any, active or not) with this party.
-    // Adjust if `politicians` table has a direct `current_party_id` FK.
     query = query.filter('party_memberships.parties.id', 'eq', partyId);
   }
-  // if (provinceId) {
+  // if (provinceId && provinceId.trim() !== '') {
   //   query = query.eq('province_id', provinceId); // Assuming 'province_id' column exists
   // }
 
   const { data, error, count } = await query;
 
   if (error) {
-    console.error('Error fetching initial politicians:', error);
+    console.error(
+      'Error fetching initial politicians. Message:', error.message, 
+      'Details:', error.details, 
+      'Hint:', error.hint, 
+      'Code:', error.code
+    );
+    console.error('Full Supabase error object for initial politicians fetch:', JSON.stringify(error, null, 2));
     return { politicians: [], count: 0 };
   }
   // console.log('[Server] Fetched Politicians:', data?.length, 'Count:', count);
