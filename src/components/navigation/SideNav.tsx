@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, Heart, Bell, User, LogIn, Settings } from 'lucide-react';
+import { Home, Search, Heart, Bell, Settings, LogIn } from 'lucide-react'; // Removed User
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
@@ -15,12 +15,10 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarMenuBadge,
-  SidebarGroup,
-  SidebarGroupLabel
 } from '@/components/ui/sidebar';
-import { NetrikaLogo } from '@/components/icons/logo';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+// Avatar related imports are no longer needed here
+// import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface NavItem {
   id: string;
@@ -39,42 +37,22 @@ const mainNavItems: NavItem[] = [
   { id: 'notifications', href: '/notifications', label: 'Notifications', icon: Bell, requiresAuth: true, badgeCount: 3 }, // Placeholder badge
 ];
 
-// This function is now only used to define the shape for an authenticated user in the footer
-const accountProfileItem = (user: ReturnType<typeof useAuth>['user']): NavItem => ({
-  id: 'profile',
-  href: '/profile',
-  label: user?.name || 'Profile',
-  icon: User,
-});
-
-
 export function SideNav() {
   const pathname = usePathname();
-  const { isAuthenticated, user, isLoading: authIsLoading } = useAuth();
-  // const notificationCount = 3; // Placeholder - already exists in mainNavItems
+  const { isAuthenticated, isLoading: authIsLoading } = useAuth(); // User object no longer needed here
 
-  const getInitials = (name?: string | null) => {
-    if (!name) return 'U';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-  };
-
-  const currentProfileDetails = isAuthenticated && user ? accountProfileItem(user) : null;
-
-  const allNavItems = [
-    ...mainNavItems.filter(item => !item.requiresAuth || isAuthenticated),
-  ];
-
+  const allNavItems = mainNavItems.filter(item => !item.requiresAuth || isAuthenticated);
 
   return (
     <Sidebar
-      variant="sidebar" // Standard sidebar behavior
-      collapsible="icon" // Collapses to icons
-      className="hidden border-r bg-sidebar text-sidebar-foreground md:flex" // Desktop only
+      variant="sidebar"
+      collapsible="icon"
+      className="hidden border-r bg-sidebar text-sidebar-foreground md:flex"
     >
-      <SidebarHeader className="p-4">
-        {/* Logo removed from here */}
-        <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-          {/* If you want a placeholder or a different icon here, you can add it */}
+      <SidebarHeader className="p-4 h-[64px] flex items-center justify-center">
+        {/* Logo was removed as per previous request, header can be used for other branding if needed */}
+         <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+          {/* Placeholder for a small icon/logo when collapsed if desired */}
         </Link>
       </SidebarHeader>
       <SidebarContent className="p-2">
@@ -110,43 +88,29 @@ export function SideNav() {
                 <Skeleton className="h-3 w-28" />
               </div>
             </div>
-          ) : isAuthenticated && user && currentProfileDetails ? (
-            <SidebarMenuButton
-              asChild
-              isActive={pathname.startsWith(currentProfileDetails.href)}
-              className="justify-start w-full"
-              tooltip={{ children: currentProfileDetails.label, side: 'right', align: 'center' }}
-            >
-              <Link href={currentProfileDetails.href} className="flex items-center gap-3">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={user.avatarUrl || undefined} alt={user.name || 'User'} data-ai-hint="user avatar" />
-                  <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
-                </Avatar>
-                <div className="group-data-[collapsible=icon]:hidden overflow-hidden">
-                  <span className="block truncate font-medium">{currentProfileDetails.label}</span>
-                  {user.email && (
-                    <span className="block truncate text-xs text-sidebar-foreground/70">{user.email}</span>
-                  )}
-                </div>
-              </Link>
-            </SidebarMenuButton>
           ) : (
-             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  className="justify-start w-full"
-                  tooltip={{ children: 'Login', side: 'right', align: 'center' }}
-                >
-                  <Link href="/auth/login" className="flex items-center gap-3">
-                    <LogIn className="h-5 w-5" />
-                    <div className="group-data-[collapsible=icon]:hidden overflow-hidden">
-                      <span className="block truncate font-medium">Login</span>
-                    </div>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
+            // Footer is now mostly empty regarding auth.
+            // Can be used for things like a settings link or other global actions.
+            <div className="h-[52px] flex items-center group-data-[collapsible=icon]:justify-center">
+               {/* Example: Add a settings link here in the future if needed 
+               <SidebarMenu>
+                 <SidebarMenuItem>
+                   <SidebarMenuButton
+                     asChild
+                     className="justify-start w-full"
+                     tooltip={{ children: 'Settings', side: 'right', align: 'center' }}
+                   >
+                     <Link href="/settings" className="flex items-center gap-3">
+                       <Settings className="h-5 w-5" />
+                       <div className="group-data-[collapsible=icon]:hidden overflow-hidden">
+                         <span className="block truncate font-medium">Settings</span>
+                       </div>
+                     </Link>
+                   </SidebarMenuButton>
+                 </SidebarMenuItem>
+               </SidebarMenu>
+               */}
+            </div>
           )}
       </SidebarFooter>
     </Sidebar>
