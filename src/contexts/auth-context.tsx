@@ -33,8 +33,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .from('users')
       .select('*')
       .eq('id', userId)
-      .single();
+      .maybeSingle(); // Changed from .single() to .maybeSingle()
     if (error) {
+      // This will now primarily log if multiple rows are found, or other unexpected db errors.
+      // "No rows found" will not be an error with maybeSingle(), data will be null.
       console.error('Error fetching user profile:', error.message);
       return null;
     }
@@ -55,6 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         avatarUrl: userProfile?.avatar_url || authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${(userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email || 'U').charAt(0).toUpperCase()}`,
         role: userProfile?.role || 'User', // Default to 'User' if not found
         contributionPoints: userProfile?.contribution_points || 0,
+        bio: userProfile?.bio // Make sure bio is included
       };
       setUser(appUser);
       setIsAuthenticated(true);
@@ -131,3 +134,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
