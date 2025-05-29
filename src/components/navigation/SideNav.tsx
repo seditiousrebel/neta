@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, Heart, Bell, Settings, LogIn } from 'lucide-react'; // Removed User
+import { Home, Search, Heart, Bell, Settings, LogIn, User as UserIcon, Users } from 'lucide-react'; // Added Users
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
@@ -17,8 +17,8 @@ import {
   SidebarMenuBadge,
 } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
-// Avatar related imports are no longer needed here
-// import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 
 interface NavItem {
   id: string;
@@ -33,13 +33,21 @@ interface NavItem {
 const mainNavItems: NavItem[] = [
   { id: 'home', href: '/', label: 'Home', icon: Home, isExact: true },
   { id: 'search', href: '/search', label: 'Search', icon: Search },
+  { id: 'politicians', href: '/politicians', label: 'Politicians', icon: Users }, // New politicians link
   { id: 'following', href: '/following', label: 'Following', icon: Heart, requiresAuth: true },
   { id: 'notifications', href: '/notifications', label: 'Notifications', icon: Bell, requiresAuth: true, badgeCount: 3 }, // Placeholder badge
 ];
 
+// Helper function to get user initials
+const getInitials = (name?: string | null) => {
+  if (!name) return 'U';
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) || 'U';
+};
+
+
 export function SideNav() {
   const pathname = usePathname();
-  const { isAuthenticated, isLoading: authIsLoading } = useAuth(); // User object no longer needed here
+  const { isAuthenticated, user, isLoading: authIsLoading } = useAuth();
 
   const allNavItems = mainNavItems.filter(item => !item.requiresAuth || isAuthenticated);
 
@@ -50,7 +58,7 @@ export function SideNav() {
       className="hidden border-r bg-sidebar text-sidebar-foreground md:flex"
     >
       <SidebarHeader className="p-4 h-[64px] flex items-center justify-center">
-        {/* Logo was removed as per previous request, header can be used for other branding if needed */}
+        {/* Logo was removed from here previously */}
          <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
           {/* Placeholder for a small icon/logo when collapsed if desired */}
         </Link>
@@ -85,32 +93,50 @@ export function SideNav() {
               <Skeleton className="h-8 w-8 rounded-full" />
               <div className="group-data-[collapsible=icon]:hidden flex-1 space-y-1">
                 <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-3 w-28" />
               </div>
             </div>
+          ) : isAuthenticated && user ? (
+             <SidebarMenuItem className="mt-auto">
+                <SidebarMenuButton
+                    asChild
+                    className="justify-start w-full"
+                    tooltip={{
+                        children: (
+                        <div className="flex flex-col items-start">
+                            <span className="font-medium">{user.name || 'User'}</span>
+                            <span className="text-xs text-muted-foreground">{user.email}</span>
+                        </div>
+                        ),
+                        side: 'right',
+                        align: 'center',
+                    }}
+                    >
+                    <Link href="/profile" className="flex items-center gap-3">
+                        <Avatar className="h-8 w-8 border group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7">
+                            <AvatarImage src={user.avatarUrl || undefined} alt={user.name || 'User'} data-ai-hint="user avatar" />
+                            <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                        </Avatar>
+                        <div className="group-data-[collapsible=icon]:hidden overflow-hidden">
+                            <span className="block truncate font-medium">{user.name || 'User'}</span>
+                        </div>
+                    </Link>
+                </SidebarMenuButton>
+            </SidebarMenuItem>
           ) : (
-            // Footer is now mostly empty regarding auth.
-            // Can be used for things like a settings link or other global actions.
-            <div className="h-[52px] flex items-center group-data-[collapsible=icon]:justify-center">
-               {/* Example: Add a settings link here in the future if needed 
-               <SidebarMenu>
-                 <SidebarMenuItem>
-                   <SidebarMenuButton
-                     asChild
-                     className="justify-start w-full"
-                     tooltip={{ children: 'Settings', side: 'right', align: 'center' }}
-                   >
-                     <Link href="/settings" className="flex items-center gap-3">
-                       <Settings className="h-5 w-5" />
-                       <div className="group-data-[collapsible=icon]:hidden overflow-hidden">
-                         <span className="block truncate font-medium">Settings</span>
-                       </div>
-                     </Link>
-                   </SidebarMenuButton>
-                 </SidebarMenuItem>
-               </SidebarMenu>
-               */}
-            </div>
+             <SidebarMenuItem className="mt-auto">
+                <SidebarMenuButton
+                    asChild
+                    className="justify-start w-full"
+                    tooltip={{ children: 'Login', side: 'right', align: 'center' }}
+                    >
+                    <Link href="/auth/login" className="flex items-center gap-3">
+                        <LogIn className="h-5 w-5" />
+                        <div className="group-data-[collapsible=icon]:hidden overflow-hidden">
+                        <span className="block truncate font-medium">Login</span>
+                        </div>
+                    </Link>
+                </SidebarMenuButton>
+            </SidebarMenuItem>
           )}
       </SidebarFooter>
     </Sidebar>
