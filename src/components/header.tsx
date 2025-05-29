@@ -20,23 +20,34 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import React, { useState } from 'react';
+import { useToast } from "@/hooks/use-toast";
 
 export function Header() {
   const { isAuthenticated, user, login, logout, isLoading } = useAuth();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [username, setUsername] = useState('');
+  const { toast } = useToast();
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (username.trim()) {
-      login(username.trim());
-      setIsLoginModalOpen(false);
-      setUsername('');
+      try {
+        await login(username.trim());
+        // Toast for success/failure is handled within authContext's login
+        setIsLoginModalOpen(false);
+        setUsername('');
+      } catch (error) {
+        // Error should be handled by authContext's login, but catch here as a fallback
+        console.error("Login process error in header:", error);
+        toast({ title: "Login Error", description: "An unexpected error occurred.", variant: "destructive" });
+      }
+    } else {
+      toast({ title: "Validation Error", description: "Username cannot be empty.", variant: "destructive" });
     }
   };
   
   const getInitials = (name?: string | null) => {
-    if (!name) return 'N';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase() || 'N';
+    if (!name) return 'N'; // Default for Netrika or Not logged in
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0,2) || 'U';
   }
 
   return (
@@ -48,7 +59,7 @@ export function Header() {
           </Link>
           <div className="flex items-center gap-4">
             {isLoading ? (
-              <Skeleton className="h-8 w-20 rounded-md" />
+              <Skeleton className="h-10 w-10 rounded-full" />
             ) : isAuthenticated && user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -77,7 +88,7 @@ export function Header() {
                   </DropdownMenuItem>
                   <DropdownMenuItem disabled>
                     <Settings className="mr-2 h-4 w-4" />
-                    Settings
+                    Settings (coming soon)
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout}>
@@ -89,7 +100,7 @@ export function Header() {
             ) : (
               <Button onClick={() => setIsLoginModalOpen(true)} variant="outline">
                 <LogIn className="mr-2 h-4 w-4" />
-                Login
+                Login / Sign Up
               </Button>
             )}
           </div>
@@ -99,9 +110,13 @@ export function Header() {
       <Dialog open={isLoginModalOpen} onOpenChange={setIsLoginModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Login to Netrika</DialogTitle>
+            <DialogTitle>Login or Sign Up</DialogTitle>
             <DialogDescription>
-              Enter a username to simulate login.
+              Enter a username. If you're new, an account will be created with a default password.
+              <br />
+              <span className="text-xs text-muted-foreground">
+                (Email will be `username@example.com`, password: `password123`. For prototype only.)
+              </span>
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -114,13 +129,16 @@ export function Header() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="col-span-3"
-                placeholder="E.g. Jane Doe"
+                placeholder="E.g. JaneDoe"
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
               />
             </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setIsLoginModalOpen(false)}>Cancel</Button>
-            <Button type="submit" onClick={handleLogin} disabled={!username.trim()}>Login</Button>
+            <Button type="submit" onClick={handleLogin} disabled={!username.trim() || isLoading}>
+              {isLoading ? "Processing..." : "Continue"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
