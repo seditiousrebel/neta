@@ -73,8 +73,8 @@ export function SideNav() {
     >
       <SidebarHeader className="p-4">
         <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+          {/* The NetrikaLogo component itself renders the "Netrika" name. Removed extra span. */}
           <NetrikaLogo className="h-8 w-auto group-data-[collapsible=icon]:h-7" />
-          <span className="font-semibold text-lg group-data-[collapsible=icon]:hidden">Netrika</span>
         </Link>
       </SidebarHeader>
       <SidebarContent className="p-2">
@@ -131,11 +131,22 @@ export function SideNav() {
               </Link>
             </SidebarMenuButton>
           ) : (
-            // If not loading and not authenticated, display nothing in the footer user slot.
-            // The Header component handles the main login/signup CTA.
-            // You could put a placeholder here if desired, e.g., a generic app icon or empty space.
-            // For now, it will be empty, making the footer potentially shorter when logged out.
-            <div className="h-[52px] group-data-[collapsible=icon]:h-12"></div> // Placeholder to maintain footer height similar to logged-in state
+             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  className="justify-start w-full"
+                  tooltip={{ children: 'Login / Sign Up', side: 'right', align: 'center' }}
+                >
+                  <Link href="/auth/login" className="flex items-center gap-3">
+                    <LogIn className="h-5 w-5" />
+                    <div className="group-data-[collapsible=icon]:hidden overflow-hidden">
+                      <span className="block truncate font-medium">Login / Sign Up</span>
+                    </div>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
           )}
       </SidebarFooter>
     </Sidebar>
