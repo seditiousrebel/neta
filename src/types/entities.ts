@@ -1,9 +1,11 @@
 
 export interface User {
   id: string;
-  name?: string | null;
+  name?: string | null; // Corresponds to full_name
   email?: string | null;
   avatarUrl?: string | null;
+  role?: "User" | "Admin" | string | null; // Role from public.users
+  contributionPoints?: number | null;
 }
 
 export type EntityType = "politician" | "party" | "promise" | "bill";

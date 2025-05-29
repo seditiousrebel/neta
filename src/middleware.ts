@@ -1,9 +1,37 @@
-import { type NextRequest } from 'next/server';
+
+import { type NextRequest, NextResponse } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
+import { createSupabaseServerClient } from '@/lib/supabase/server'; // To check auth status
+
+const AUTH_PAGES = ['/auth/login', '/auth/register', '/auth/reset-password', '/auth/callback'];
+const PROTECTED_PAGES = ['/profile', '/following', '/notifications']; // Add more as needed
+
+const isAuthPage = (path: string) => AUTH_PAGES.some(page => path.startsWith(page));
+const isProtectedPage = (path: string) => PROTECTED_PAGES.some(page => path.startsWith(page));
 
 export async function middleware(request: NextRequest) {
-  // update user session
-  return await updateSession(request);
+  // First, update the session for all requests.
+  // This is important for keeping the Supabase auth cookie fresh.
+  const response = await updateSession(request);
+
+  const supabase = createSupabaseServerClient(); // Use server client for auth check
+  const { data: { user } } = await supabase.auth.getUser();
+  const isAuthenticated = !!user;
+  const { pathname } = request.nextUrl;
+
+  // If user is authenticated and tries to access auth pages, redirect to home
+  if (isAuthenticated && isAuthPage(pathname)) {
+    return NextResponse.redirect(new URL('/', request.url));
+  }
+
+  // If user is not authenticated and tries to access protected pages, redirect to login
+  if (!isAuthenticated && isProtectedPage(pathname)) {
+    const redirectUrl = new URL('/auth/login', request.url);
+    redirectUrl.searchParams.set('next', pathname); // Store intended destination
+    return NextResponse.redirect(redirectUrl);
+  }
+  
+  return response;
 }
 
 export const config = {
