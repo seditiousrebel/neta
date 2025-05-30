@@ -1,4 +1,3 @@
-
 // src/app/politicians/page.tsx
 "use client";
 
@@ -6,7 +5,7 @@ import React, { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import type { PoliticianSummary, PartyFilterOption, ProvinceFilterOption } from '@/types/entities';
+import type { PartyFilterOption, ProvinceFilterOption, PoliticianSummary } from '@/types/entities';
 import PoliticianFilters from '@/components/politicians/PoliticianFilters';
 import PoliticianList from '@/components/politicians/PoliticianList';
 import PaginationControls from '@/components/ui/PaginationControls';
@@ -18,28 +17,17 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import PoliticianForm, { type PoliticianFormData } from '@/components/contribute/PoliticianForm';
 import { submitNewPoliticianContribution } from '@/lib/supabase/contributions';
 import { useAuth } from '@/contexts/auth-context';
-import { getPartyFilterOptions, getProvinceFilterOptions } from '@/lib/supabase/data'; // Server functions
+import { getPartyFilterOptions, getProvinceFilterOptions } from '@/lib/supabase/data';
+import { usePoliticians } from '@/hooks/usePoliticians'; // Import the hook
 
 const ITEMS_PER_PAGE = 12;
 
-// Props for the page component
-interface PoliticiansPageProps {
-  // initialPoliticians and initialTotalCount are still relevant if initial data is fetched server-side
-  // for the first page load, before client-side filtering/pagination takes over.
-  // However, if this page is purely client-rendered for the list, these might come from usePoliticians hook directly.
-  // For now, assume initialPoliticians can be passed if pre-rendered on server.
-  initialPoliticians?: PoliticianSummary[];
-  initialTotalCount?: number | null;
-  // currentSearchParams can be derived client-side using useSearchParams hook
-}
+// No longer needs initialPoliticians or initialTotalCount as props
+interface PoliticiansPageProps {}
 
-// This is the client component part
-export default function PoliticiansPageClient({
-  initialPoliticians = [], // Default to empty array
-  initialTotalCount = 0,  // Default to 0
-}: PoliticiansPageProps) {
+export default function PoliticiansPageClient({}: PoliticiansPageProps) {
   const router = useRouter();
-  const currentSearchParamsHook = useSearchParams(); // Use hook for search params
+  const currentSearchParamsHook = useSearchParams();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [partyOptions, setPartyOptions] = useState<PartyFilterOption[]>([]);
@@ -64,7 +52,6 @@ export default function PoliticiansPageClient({
         setProvinceOptions(provinces);
       } catch (error) {
         console.error("Failed to fetch filter options:", error);
-        // Optionally set an error state here to inform the user
       } finally {
         setIsLoadingFilterOptions(false);
       }
@@ -72,7 +59,6 @@ export default function PoliticiansPageClient({
     fetchFilterOptions();
   }, []);
 
-  // Derive currentSearchParams from the hook
   const currentSearchParams = {
     q: currentSearchParamsHook.get('q') || undefined,
     page: currentSearchParamsHook.get('page') || undefined,
@@ -83,8 +69,28 @@ export default function PoliticiansPageClient({
   };
 
   const currentPage = Number(currentSearchParams?.page) || 1;
-  // totalPages calculation now depends on how totalCount is managed (passed or from usePoliticians hook)
-  const totalPages = initialTotalCount !== null ? Math.ceil(initialTotalCount / ITEMS_PER_PAGE) : 0;
+
+  const {
+    data: politicianHookData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isLoadingPoliticians,
+    isError: isPoliticiansError,
+    error: politiciansError,
+  } = usePoliticians(
+    { 
+      searchTerm: currentSearchParams.q,
+      partyId: currentSearchParams.partyId,
+      provinceId: currentSearchParams.provinceId,
+      hasCriminalRecord: currentSearchParams.has_criminal_record
+    }
+    // No initialData passed here; the hook fetches everything
+  );
+
+  const allPoliticians = politicianHookData?.pages.flatMap(page => page.data) || [];
+  const currentTotalCount = politicianHookData?.pages[0]?.totalCount ?? 0;
+  const totalPages = Math.ceil(currentTotalCount / ITEMS_PER_PAGE);
 
   const paramsForPagination = new URLSearchParams();
   if (currentSearchParams?.q) paramsForPagination.set('q', currentSearchParams.q);
@@ -93,17 +99,18 @@ export default function PoliticiansPageClient({
   if (currentSearchParams?.has_criminal_record) paramsForPagination.set('has_criminal_record', currentSearchParams.has_criminal_record);
   if (currentSearchParams?.view) paramsForPagination.set('view', currentSearchParams.view);
 
-  const isInitialLoadAndNoPoliticians = 
+  const isTrulyEmptyDatabase =
     !currentSearchParams?.q &&
     !currentSearchParams?.partyId &&
     !currentSearchParams?.provinceId &&
     (!currentSearchParams?.has_criminal_record || currentSearchParams?.has_criminal_record === 'any') &&
-    initialTotalCount === 0;
+    !isLoadingPoliticians && // Check against the hook's loading state
+    currentTotalCount === 0; // Check against the hook's fetched total count
 
   const handleOpenContributeModal = () => {
     if (!isAuthenticated) {
       const loginUrl = new URL('/auth/login', window.location.origin);
-      loginUrl.searchParams.set('next', '/politicians'); // Redirect back to politicians page
+      loginUrl.searchParams.set('next', '/politicians');
       router.push(loginUrl.toString());
       return;
     }
@@ -142,7 +149,7 @@ export default function PoliticiansPageClient({
       setSubmissionStatus('success');
       setSubmissionMessage(`Contribution submitted successfully! Your Edit ID is ${editId}. It will be reviewed by an admin.`);
       setIsPreviewing(false); 
-      // Consider revalidating or refetching the politicians list here if using TanStack Query
+      // TODO: Consider revalidating or refetching the politicians list here if using TanStack Query
       // router.refresh(); // Or use TanStack Query's invalidateQueries
     } catch (err: any) {
       setSubmissionStatus('error');
@@ -160,6 +167,7 @@ export default function PoliticiansPageClient({
     }, 300);
   };
 
+  const showLoadingSkeletons = isLoadingPoliticians && allPoliticians.length === 0;
 
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:p-8">
@@ -183,28 +191,43 @@ export default function PoliticiansPageClient({
         <PoliticianFilters parties={partyOptions} provinces={provinceOptions} isLoadingOptions={isLoadingFilterOptions} />
       </Suspense>
       
-      {isInitialLoadAndNoPoliticians && !isLoadingFilterOptions ? ( // Also check isLoadingFilterOptions
+      {showLoadingSkeletons ? (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mt-8">
+          {Array.from({ length: ITEMS_PER_PAGE }).map((_, index) => (
+            <Skeleton key={index} className="h-[350px] w-full rounded-lg" />
+          ))}
+        </div>
+      ) : isPoliticiansError ? (
+        <p className="text-destructive text-center py-8">Error loading politicians: {politiciansError?.message}</p>
+      ) : isTrulyEmptyDatabase && !isLoadingFilterOptions ? (
         <div className="text-center text-muted-foreground py-12">
           <p className="text-xl mb-2">No Politicians Found in the Database</p>
           <p className="mb-4">It looks like there are no politicians listed yet. Be the first to add one!</p>
-           {/* Button removed from here as it's now globally at the top */}
         </div>
       ) : (
         <>
-          <Suspense fallback={
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mt-8">
-              {Array.from({ length: ITEMS_PER_PAGE }).map((_, index) => (
-                <Skeleton key={index} className="h-[350px] w-full rounded-lg" />
-              ))}
+          <PoliticianList 
+            politicians={allPoliticians} 
+            isLoading={isLoadingPoliticians && allPoliticians.length > 0} // Pass true if loading more but some already shown
+            isError={isPoliticiansError}
+            error={politiciansError}
+            totalCount={currentTotalCount}
+          />
+          {hasNextPage && (
+            <div className="mt-8 flex justify-center">
+              <Button
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                variant="outline"
+              >
+                {isFetchingNextPage ? 'Loading more...' : 'Load More Politicians'}
+              </Button>
             </div>
-          }>
-            <PoliticianList initialPoliticians={initialPoliticians} initialTotalCount={initialTotalCount ?? 0} />
-          </Suspense>
-
-          {initialTotalCount !== null && totalPages > 1 && (
+          )}
+          {totalPages > 1 && (
             <PaginationControls
               currentPage={currentPage}
-              totalCount={initialTotalCount}
+              totalCount={currentTotalCount}
               itemsPerPage={ITEMS_PER_PAGE}
               basePath="/politicians"
               currentSearchParams={paramsForPagination}
@@ -274,7 +297,7 @@ export default function PoliticiansPageClient({
                 })}
               </div>
             )}
-          </div> {/* This closes the "flex-grow overflow-y-auto..." div */}
+          </div>
 
           <DialogFooter className="mt-auto pt-4 border-t">
             {submissionStatus === 'success' ? (
@@ -297,4 +320,4 @@ export default function PoliticiansPageClient({
       </Dialog>
     </div>
   ); 
-} 
+}
