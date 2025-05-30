@@ -4,6 +4,7 @@
 import { revalidatePath } from "next/cache";
 import { denyEdit, approveEdit } from "@/lib/supabase/admin"; 
 import { createSupabaseServerClient } from "../supabase/server";
+import type { PoliticianFormData } from "@/components/contribute/PoliticianForm"; // Ensure this type is available
 
 export async function denyPendingEditAction(editId: number) {
   const supabase = createSupabaseServerClient();
@@ -27,13 +28,14 @@ export async function denyPendingEditAction(editId: number) {
 
 export async function approvePendingEditAction(editId: number) {
   const supabase = createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user: adminUser } } = await supabase.auth.getUser();
 
-  if (!user) {
-    return { success: false, error: "User not authenticated." };
+  if (!adminUser) {
+    return { success: false, error: "Admin user not authenticated." };
   }
+  const adminId = adminUser.id;
 
-  const result = await approveEdit(editId);
+  const result = await approveEdit(editId); // approveEdit likely needs adminId
   
   if (result.success) {
     revalidatePath("/admin/moderation");
@@ -44,26 +46,17 @@ export async function approvePendingEditAction(editId: number) {
 
       switch (result.entityType) {
         case 'Politician':
-          specificPath = `/politicians/${result.entityId}`;
+          specificPath = \`/politicians/\${result.entityId}\`;
           listPath = '/politicians';
           break;
         case 'Party':
-          specificPath = `/parties/${result.entityId}`;
+          specificPath = \`/parties/\${result.entityId}\`;
           listPath = '/parties';
           break;
-        // Add more cases for other entity types as needed
-        // e.g., case 'Promise': specificPath = `/promises/${result.entityId}`; listPath = '/promises'; break;
       }
 
-      if (specificPath) {
-        revalidatePath(specificPath);
-        console.log(`Revalidated path: ${specificPath}`);
-      }
-      if (listPath) {
-        revalidatePath(listPath);
-        console.log(`Revalidated path: ${listPath}`);
-      }
-      // Optionally revalidate home page or general feed if applicable
+      if (specificPath) revalidatePath(specificPath);
+      if (listPath) revalidatePath(listPath);
       revalidatePath("/"); 
     }
     
@@ -73,8 +66,7 @@ export async function approvePendingEditAction(editId: number) {
   }
 }
 
-// New action to approve a new politician
-export async function approveNewPoliticianAction(editId: number) {
+export async function approveNewPoliticianAction(editId: number): Promise<{ success: boolean; message?: string; error?: string; politicianId?: string }> {
   const supabase = createSupabaseServerClient();
   const { data: { user: adminUser } } = await supabase.auth.getUser();
 
@@ -86,77 +78,72 @@ export async function approveNewPoliticianAction(editId: number) {
   // 1. Fetch Pending Edit
   const { data: pendingEdit, error: fetchError } = await supabase
     .from('pending_edits')
-    .select('*')
+    .select('id, proposed_data, entity_type, status, proposer_id')
     .eq('id', editId)
     .single();
 
   if (fetchError || !pendingEdit) {
-    console.error(`Error fetching pending edit ${editId}:`, fetchError?.message);
-    return { success: false, error: `Pending edit with ID ${editId} not found or fetch error.` };
+    console.error(\`approveNewPoliticianAction: Error fetching pending edit \${editId}:\`, fetchError?.message);
+    return { success: false, error: \`Pending edit with ID \${editId} not found or fetch error.\` };
   }
 
   if (pendingEdit.status !== 'Pending') {
-    return { success: false, error: `Edit ${editId} is not in 'Pending' status.` };
+    return { success: false, error: \`Edit \${editId} is not in 'Pending' status.\` };
   }
-
   if (pendingEdit.entity_type !== 'Politician') {
-    return { success: false, error: `Edit ${editId} is not for a Politician entity.` };
+    return { success: false, error: \`Edit \${editId} is not for a Politician entity.\` };
   }
-
-  // This action is specifically for new politicians, so entity_id should ideally be null.
-  // However, the generic approveEdit in supabase/admin.ts handles both new and existing.
-  // For this specific action, we are creating a new politician.
-  // If pendingEdit.entity_id is not null, it implies an update to an existing record,
-  // which should ideally be handled by approvePendingEditAction or a more specific update action.
-  // For now, we proceed assuming this action is correctly called for new entries.
-
-  const proposedData = pendingEdit.proposed_data as Partial<PoliticianData>;
-
-  // 2. Validate Proposed Data (Basic validation - ensure essential fields if necessary)
-  // For example, ensure 'name' is present, as it's usually a required field.
-  if (!proposedData.name) {
-    return { success: false, error: "Proposed data is missing the required 'name' field." };
+  if (!pendingEdit.proposer_id) {
+    return { success: false, error: "Proposer ID missing from pending edit." };
   }
   
-  // Map PoliticianData to the expected structure for the 'politicians' table.
-  // Assuming PoliticianData is already closely aligned with the table structure.
-  // Fields like contact_information and social_media_handles are objects and will be stored as JSONB.
+  const proposedData = pendingEdit.proposed_data as Partial<PoliticianFormData>;
+  if (!proposedData || !proposedData.name) {
+    return { success: false, error: "Proposed data is missing or invalid (e.g., name is required)." };
+  }
+  
+  // Map PoliticianFormData from proposed_data to the structure for 'politicians' table.
+  // Ensure data types are correct (e.g., parsing numbers, handling dates).
+  // For simplicity, assuming direct mapping for now. Complex fields like contact_information 
+  // and social_media_handles are objects and will be stored as JSONB.
+  // photo_asset_id is expected to be a UUID string from the upload process.
   const politicianTableData = {
     name: proposedData.name,
     name_nepali: proposedData.name_nepali,
-    dob: proposedData.dob, // Ensure this is in 'YYYY-MM-DD' format if DB expects date
+    dob: proposedData.dob || null, // Handle optional date
     gender: proposedData.gender,
-    photo_asset_id: proposedData.photo_asset_id,
+    photo_asset_id: proposedData.photo_asset_id || null,
     biography: proposedData.biography,
-    education_details: proposedData.education_details, // Stored as JSONB
-    political_journey: proposedData.political_journey, // Stored as JSONB
-    criminal_records: proposedData.criminal_records,   // Stored as JSONB
-    asset_declarations: proposedData.asset_declarations, // Stored as JSONB
-    contact_information: proposedData.contact_information, // Stored as JSONB
-    social_media_handles: proposedData.social_media_handles, // Stored as JSONB
-    // Any other fields that are part of the 'politicians' table and are in PoliticianData
-    // Ensure to exclude any temporary fields from PoliticianData not meant for the DB table.
+    education_details: proposedData.education_details, // JSON string
+    political_journey: proposedData.political_journey, // JSON string
+    criminal_records: proposedData.criminal_records,   // JSON string
+    asset_declarations: proposedData.asset_declarations, // JSON string
+    contact_information: proposedData.contact_information || {}, // JSONB
+    social_media_handles: proposedData.social_media_handles || {}, // JSONB
+    // is_independent needs to be derived or set based on party info (not in current form)
+    // province_id needs to be derived or set (not in current form)
+    // fts_vector will be auto-updated by DB trigger if configured
   };
 
-  // 3. Create Politician
+  // 2. Create Politician in 'politicians' table
   const { data: newPolitician, error: insertPoliticianError } = await supabase
     .from('politicians')
     .insert(politicianTableData)
-    .select('id') // Select the ID of the newly created politician
+    .select('id')
     .single();
 
   if (insertPoliticianError || !newPolitician) {
     console.error('Error inserting new politician:', insertPoliticianError?.message);
-    return { success: false, error: `Failed to create new politician: ${insertPoliticianError?.message}` };
+    return { success: false, error: \`Failed to create new politician: \${insertPoliticianError?.message}\` };
   }
-  const newPoliticianId = newPolitician.id;
+  const newPoliticianId = String(newPolitician.id); // Ensure ID is string
 
-  // 4. Update Pending Edit
+  // 3. Update Pending Edit status
   const { error: updateEditError } = await supabase
     .from('pending_edits')
     .update({
       status: 'Approved',
-      admin_feedback: `Approved by admin ${adminId} on ${new Date().toLocaleDateString()}`,
+      admin_feedback: \`Approved by admin \${adminId} on \${new Date().toLocaleDateString()}\`,
       updated_at: new Date().toISOString(),
       entity_id: newPoliticianId, // Link to the newly created politician
       moderator_id: adminId,
@@ -164,23 +151,19 @@ export async function approveNewPoliticianAction(editId: number) {
     .eq('id', editId);
 
   if (updateEditError) {
-    console.error(`Error updating status for pending edit ${editId}:`, updateEditError.message);
-    // At this point, a politician record was created. This is a partial failure.
-    // Ideally, this whole process should be a transaction.
-    // For now, return error, but be aware of potential inconsistency.
-    return { success: false, error: `New politician created (ID: ${newPoliticianId}), but failed to update pending edit status: ${updateEditError.message}` };
+    // Attempt to roll back politician creation or log inconsistency
+    console.error(\`Error updating status for pending edit \${editId}:\`, updateEditError.message);
+    return { success: false, error: \`New politician created (ID: \${newPoliticianId}), but failed to update pending edit status.\` };
   }
 
-  // 5. Create Entity Revision
-  // Assuming 'entity_revisions' table structure: entity_type, entity_id, data, submitter_id, approver_id, created_at
+  // 4. Create Entity Revision
   const revisionData = {
     entity_type: 'Politician',
     entity_id: newPoliticianId,
-    data: politicianTableData, // Store the approved data
+    data: politicianTableData,
     submitter_id: pendingEdit.proposer_id,
     approver_id: adminId,
-    created_at: new Date().toISOString(), 
-    // reason: 'Initial creation via pending edit approval' // Optional: if you have a reason field
+    edit_id: edit.id, // Link back to the original pending_edit
   };
 
   const { error: insertRevisionError } = await supabase
@@ -188,22 +171,17 @@ export async function approveNewPoliticianAction(editId: number) {
     .insert(revisionData);
 
   if (insertRevisionError) {
-    console.error(`Error inserting entity revision for politician ${newPoliticianId}:`, insertRevisionError.message);
-    // This is also a partial failure. Politician created, edit approved, but revision failed.
-    return { success: false, error: `Politician approved and edit status updated, but failed to create entity revision: ${insertRevisionError.message}` };
+    console.warn(\`Error inserting entity revision for politician \${newPoliticianId}:\`, insertRevisionError.message);
+    // Non-critical for the success message, but good to log
   }
 
-  // Placeholders for future functionality
-  // TODO: Award points to proposer (pendingEdit.proposer_id)
-  // TODO: Notify user (pendingEdit.proposer_id) that their submission was approved
-
-  // 6. Revalidation
   revalidatePath("/admin/moderation");
-  revalidatePath("/politicians"); // List page
-  revalidatePath(`/politicians/${newPoliticianId}`); // Detail page of the new politician
+  revalidatePath("/politicians");
+  revalidatePath(\`/politicians/\${newPoliticianId}\`);
 
   return { 
     success: true, 
-    message: `New politician (ID: ${newPoliticianId}) approved and created successfully from edit ${editId}.` 
+    message: \`New politician (ID: \${newPoliticianId}) approved and created from contribution \${editId}.\`,
+    politicianId: newPoliticianId
   };
 }

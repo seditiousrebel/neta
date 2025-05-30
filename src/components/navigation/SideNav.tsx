@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, Heart, Bell, Users, LogIn } from 'lucide-react';
+import { Home, Search, Heart, Bell, Users, LogIn, PlusCircle } from 'lucide-react'; // Added PlusCircle
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
@@ -18,8 +18,6 @@ import {
 } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-// import { Button } from '@/components/ui/button'; // No longer used for login button here
-// import { NetrikaLogo } from '@/components/icons/logo'; // Logo removed from SideNav header in previous step
 
 interface NavItem {
   id: string;
@@ -36,7 +34,8 @@ const mainNavItems: NavItem[] = [
   { id: 'search', href: '/search', label: 'Search', icon: Search },
   { id: 'politicians', href: '/politicians', label: 'Politicians', icon: Users },
   { id: 'following', href: '/following', label: 'Following', icon: Heart, requiresAuth: true },
-  { id: 'notifications', href: '/notifications', label: 'Notifications', icon: Bell, requiresAuth: true, badgeCount: 3 },
+  { id: 'notifications', href: '/notifications', label: 'Notifications', icon: Bell, requiresAuth: true, badgeCount: 3 }, // Placeholder badge count
+  { id: 'contribute', href: '/contribute/politician', label: 'Contribute', icon: PlusCircle, requiresAuth: true },
 ];
 
 const getInitials = (name?: string | null) => {
@@ -57,9 +56,8 @@ export function SideNav() {
       className="hidden border-r bg-sidebar text-sidebar-foreground md:flex"
     >
       <SidebarHeader className="p-4 h-[64px] flex items-center justify-center">
-        {/* Logo was removed from here previously */}
          <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-          {/* <NetrikaLogo className="h-8 w-auto group-data-[collapsible=icon]:h-7" /> */}
+           {/* Logo can be re-added here if desired */}
         </Link>
       </SidebarHeader>
       <SidebarContent className="p-2">
@@ -128,11 +126,12 @@ export function SideNav() {
                     className="justify-start w-full"
                     tooltip={{ children: 'Login', side: 'right', align: 'center' }}
                     >
-                    <Link href="/auth/login" className="flex items-center gap-2 pl-1"> {/* Adjusted gap and padding slightly */}
-                        {/* <LogIn className="h-5 w-5" /> Removed LogIn icon */}
+                    <Link href="/auth/login" className="flex items-center gap-3 pl-1"> 
                         <div className="group-data-[collapsible=icon]:hidden overflow-hidden">
-                        <span className="block truncate font-medium">Login</span>
+                          <LogIn className="h-5 w-5 inline-block mr-1 group-data-[collapsible=icon]:hidden" />
+                          <span className="block truncate font-medium">Login</span>
                         </div>
+                         <LogIn className="h-5 w-5 hidden group-data-[collapsible=icon]:inline-block" />
                     </Link>
                 </SidebarMenuButton>
             </SidebarMenuItem>

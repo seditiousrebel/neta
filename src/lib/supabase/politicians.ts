@@ -1,14 +1,15 @@
 // src/lib/supabase/politicians.ts
-import { createSupabaseClient } from '@/lib/supabase/client'; // Using client for potential client-side fetch
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'; // Using client for potential client-side fetch
 import type { PoliticianFormData } from '@/components/contribute/PoliticianForm'; // For return type
 
-// Get the public Supabase client
-const supabase = createSupabaseClient();
+// Get the public Supabase client - for client-side usage if needed.
+// For server-side, use createSupabaseServerClient().
+const supabase = createSupabaseBrowserClient();
 
 /**
  * Fetches a politician's current data by their ID.
  * This function is intended to be callable from client-side components if needed,
- * or can be adapted for server-side usage.
+ * or can be adapted for server-side usage by passing a Supabase client.
  * 
  * @param politicianId The ID of the politician to fetch.
  * @returns A promise that resolves to the politician's data (as PoliticianFormData) or null if not found or error.
@@ -19,9 +20,18 @@ export async function getPoliticianById(politicianId: string | number): Promise<
     return null;
   }
 
+  // Ensure ID is a number if your DB column 'id' for politicians is numeric.
+  // If it's UUID string, this conversion is not needed.
+  const numericId = Number(politicianId);
+  if (isNaN(numericId)) {
+    console.error("getPoliticianById: Invalid politicianId format, expected numeric or convertible to numeric.");
+    return null;
+  }
+
+
   const { data, error } = await supabase
-    .from('politicians') // Ensure this is your actual table name
-    .select(`
+    .from('politicians')
+    .select(\`
       name,
       name_nepali,
       dob,
@@ -34,24 +44,22 @@ export async function getPoliticianById(politicianId: string | number): Promise<
       asset_declarations,
       contact_information,
       social_media_handles
-    `) // Select fields that align with PoliticianFormData
-    .eq('id', politicianId)
-    .single();
+    \`) 
+    .eq('id', numericId) // Use numericId here
+    .maybeSingle(); // Use maybeSingle to return null if not found, instead of erroring
 
   if (error) {
-    console.error(`Error fetching politician with ID ${politicianId}:`, error.message);
+    console.error(\`Error fetching politician with ID \${politicianId}:\`, error.message);
     return null;
   }
 
   if (!data) {
-    console.warn(`No politician found with ID ${politicianId}.`);
+    // This is not an error, just means no politician found with that ID.
+    // console.warn(\`No politician found with ID: \${politicianId}.\`);
     return null;
   }
 
   // The data from the DB should ideally match PoliticianFormData.
-  // If there are discrepancies (e.g. DB stores JSON as strings that need parsing for `any[]` types),
-  // further transformation might be needed here. For now, assume direct compatibility.
-  // If education_details etc. are stored as JSON strings, they might need JSON.parse.
-  // However, Supabase client usually handles JSONB parsing automatically.
+  // Supabase client usually handles JSONB parsing automatically.
   return data as Partial<PoliticianFormData>;
 }
