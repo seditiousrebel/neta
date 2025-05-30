@@ -5,7 +5,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { PoliticianFormData } from "@/components/contribute/PoliticianForm";
-import type { Tables } from "@/types/supabase";
+import type { Tables, Database } from "@/types/supabase"; // Added Database for type safety
 
 export async function approvePoliticianAction(
   editId: number,
@@ -14,16 +14,17 @@ export async function approvePoliticianAction(
   const supabase = createSupabaseServerClient();
   let newPoliticianId: string | null = null;
 
+  console.log("[approvePoliticianAction] Called with editId:", editId, "adminId:", adminId);
+
   try {
-    // 1. Get the pending edit and its proposer's ID
     const { data: edit, error: fetchError } = await supabase
       .from('pending_edits')
-      .select('id, proposed_data, entity_type, status, proposer_id') // Ensure proposer_id is selected
+      .select('id, proposed_data, entity_type, status, proposer_id')
       .eq('id', editId)
       .single();
 
     if (fetchError || !edit) {
-      console.error('approvePoliticianAction: Error fetching pending edit ' + editId + ':', fetchError?.message);
+      console.error("approvePoliticianAction: Error fetching pending edit " + editId + ":", fetchError?.message);
       return { success: false, message: `Pending edit with ID ${editId} not found.` };
     }
 
@@ -60,7 +61,7 @@ export async function approvePoliticianAction(
             }
         }
     }
-    delete politicianDataForInsert.id;
+    delete politicianDataForInsert.id; // Ensure 'id' from proposed_data (if any) is not sent for insert
 
 
     const { data: newPoliticianEntry, error: insertPoliticianError } = await supabase
@@ -70,7 +71,7 @@ export async function approvePoliticianAction(
       .single();
 
     if (insertPoliticianError || !newPoliticianEntry || !newPoliticianEntry.id) {
-      console.error(`approvePoliticianAction: Error inserting new politician from edit ${editId}:`, insertPoliticianError?.message);
+      console.error(`approvePoliticianAction: Error inserting new politician from edit ${editId}:`, insertPoliticianError?.message, insertPoliticianError?.details);
       return { success: false, message: `Failed to create politician entry: ${insertPoliticianError?.message || 'No ID returned'}` };
     }
     newPoliticianId = String(newPoliticianEntry.id);
@@ -80,13 +81,13 @@ export async function approvePoliticianAction(
       .update({
         status: 'Approved',
         moderator_id: adminId,
-        entity_id: newPoliticianId, // Storing as string, DB column is string|null
+        entity_id: newPoliticianId, 
         updated_at: new Date().toISOString(),
       })
       .eq('id', editId);
 
     if (updateEditError) {
-      console.error(`approvePoliticianAction: Error updating pending edit ${editId} status:`, updateEditError.message);
+      console.error(`approvePoliticianAction: Error updating pending edit ${editId} status:`, updateEditError.message, updateEditError?.details);
       return {
         success: false,
         message: `Politician created (ID: ${newPoliticianId}), but failed to update edit status: ${updateEditError.message}`,
@@ -98,11 +99,13 @@ export async function approvePoliticianAction(
       .from('entity_revisions')
       .insert({
         entity_type: 'Politician',
-        entity_id: parseInt(newPoliticianId, 10), // entity_revisions.entity_id is number
-        data: edit.proposed_data, // Store the original proposed_data from pending_edits
+        entity_id: parseInt(newPoliticianId, 10), 
+        data: edit.proposed_data, 
         submitter_id: edit.proposer_id,
         approver_id: adminId,
+        approved_at: new Date().toISOString(), // Added approved_at for revisions table
         edit_id: edit.id,
+        change_reason: (edit as any).change_reason || "Approved new politician submission", // Ensure change_reason is included
       });
 
     if (revisionError) {
@@ -132,6 +135,7 @@ export interface DirectUpdateReturnType {
   data?: any;
   error?: string;
   message?: string;
+  details?: any; 
 }
 
 const JSON_STRING_FIELDS_IN_POLITICIANS_TABLE: Array<keyof Tables<'politicians'>['Row']> = [
@@ -143,7 +147,7 @@ const JSON_STRING_FIELDS_IN_POLITICIANS_TABLE: Array<keyof Tables<'politicians'>
 
 
 export async function updatePoliticianDirectly(
-  politicianId: string, // This is string from URL param, but politicians.id is number
+  politicianId: string, 
   fieldName: keyof Tables<'politicians'>['Row'],
   newValue: any,
   adminId: string,
@@ -151,15 +155,17 @@ export async function updatePoliticianDirectly(
 ): Promise<DirectUpdateReturnType> {
   const supabase = createSupabaseServerClient();
   const numericPoliticianId = parseInt(politicianId, 10);
+
+  console.log("[updatePoliticianDirectly] Admin ID:", adminId, "Politician ID (numeric):", numericPoliticianId, "Field:", String(fieldName), "New Value:", newValue);
+
   if (isNaN(numericPoliticianId)) {
+    console.error("[updatePoliticianDirectly] Invalid Politician ID provided:", politicianId);
     return { success: false, error: "Invalid Politician ID format." };
   }
 
-  console.log(`[updatePoliticianDirectly] Admin ID: ${adminId}, Politician ID: ${politicianId}, Field: ${String(fieldName)}`);
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!uuidRegex.test(adminId)) {
-    console.error("[updatePoliticianDirectly] CRITICAL: adminId parameter does not look like a UUID:", adminId);
-    // return { success: false, error: "Internal error: Invalid admin identifier." };
+    console.warn("[updatePoliticianDirectly] Potential Issue: adminId parameter does not look like a UUID:", adminId);
   }
 
   try {
@@ -182,16 +188,17 @@ export async function updatePoliticianDirectly(
     const { data: updatedPolitician, error: updateError } = await supabase
       .from('politicians')
       .update(updateObject)
-      .eq('id', numericPoliticianId) // Use numeric ID for comparison
+      .eq('id', numericPoliticianId) 
       .select()
       .single();
 
     if (updateError) {
-      console.error(`Error updating politician ${politicianId} for field ${String(fieldName)}:`, updateError);
+      console.error(`Error updating politician ${politicianId} for field ${String(fieldName)}:`, updateError.message, updateError.details);
       return {
         success: false,
         error: updateError.message,
-        message: `Failed to update politician data for field ${String(fieldName)}.`
+        message: `Failed to update politician data for field ${String(fieldName)}.`,
+        details: updateError.details,
       };
     }
 
@@ -204,14 +211,13 @@ export async function updatePoliticianDirectly(
       };
     }
 
-    // For entity_revisions.data (JSONB), store the original newValue (or null if undefined)
     const revisionDataValueForField = newValue === undefined ? null : newValue;
     const revisionDataPayload = { [fieldName]: revisionDataValueForField };
 
     const revisionData = {
       entity_type: 'Politician' as const,
-      entity_id: numericPoliticianId, // Use numeric ID
-      data: revisionDataPayload, // Store the original structure for JSONB
+      entity_id: numericPoliticianId, 
+      data: revisionDataPayload, 
       submitter_id: adminId,
       approver_id: adminId,
       approved_at: new Date().toISOString(),
@@ -224,11 +230,11 @@ export async function updatePoliticianDirectly(
       .insert(revisionData);
 
     if (revisionError) {
-      console.warn(`Error creating entity revision for politician ${politicianId} after direct admin update:`, revisionError);
+      console.warn(`Error creating entity revision for politician ${politicianId} after direct admin update:`, revisionError.message, revisionError.details);
     }
 
     revalidatePath(`/politicians`);
-    revalidatePath(`/politicians/${politicianId}`); // Path is string based on URL
+    revalidatePath(`/politicians/${politicianId}`); 
 
     return {
       success: true,
@@ -241,7 +247,8 @@ export async function updatePoliticianDirectly(
     return {
       success: false,
       error: e.message || 'An unexpected error occurred.',
-      message: 'An unexpected error occurred during the direct update.'
+      message: 'An unexpected error occurred during the direct update.',
+      details: e.toString(),
     };
   }
 }
@@ -251,23 +258,24 @@ export interface SubmitEditReturnType {
   success: boolean;
   message?: string;
   error?: string;
-  editId?: number | string; // pending_edits.id is number
+  editId?: number | string;
+  details?: any; 
 }
 
-// This action is for single-field edits (typically from EditModal by non-admins)
+
 export async function submitPoliticianEdit(
-  politicianId: string, // From URL, string
+  politicianId: string, 
   fieldName: string,
   newValue: any,
   changeReason: string,
   userId: string
 ): Promise<SubmitEditReturnType> {
   const supabase = createSupabaseServerClient();
-  console.log("[submitPoliticianEdit] Received userId:", userId, "politicianId:", politicianId, "fieldName:", fieldName);
+  console.log("[submitPoliticianEdit] Received userId:", userId, "politicianId:", politicianId, "fieldName:", fieldName, "newValue:", newValue);
+  
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!uuidRegex.test(userId)) {
-    console.error("[submitPoliticianEdit] CRITICAL: userId parameter does not look like a UUID:", userId);
-    // return { success: false, error: "Internal error: Invalid user identifier for edit submission." };
+    console.warn("[submitPoliticianEdit] Potential Issue: userId parameter ('"+userId+"') does not look like a UUID.");
   }
 
   try {
@@ -278,17 +286,20 @@ export async function submitPoliticianEdit(
         finalValueToPropose = JSON.stringify(finalValueToPropose);
     } else if (fieldName === 'bio' && (typeof finalValueToPropose === 'object' && finalValueToPropose !== null)) {
         finalValueToPropose = JSON.stringify(finalValueToPropose);
+    } else if (typeof finalValueToPropose === 'object' && finalValueToPropose !== null) {
+        // Catch-all for other potential object values meant for JSONB, ensure they are stringified
+        finalValueToPropose = JSON.stringify(finalValueToPropose);
     }
     
     const proposedDataWrapper = { [fieldName]: finalValueToPropose };
 
-    const pendingEditData = {
-      entity_type: 'Politician' as const,
-      entity_id: politicianId, 
+    const pendingEditData: Tables<'pending_edits'>['Insert'] = {
+      entity_type: 'Politician',
+      entity_id: String(politicianId), // Ensure politicianId is explicitly string for pending_edits.entity_id
       proposed_data: proposedDataWrapper,
       change_reason: changeReason,
       proposer_id: userId, 
-      status: 'Pending' as const,
+      status: 'Pending',
     };
     console.log("[submitPoliticianEdit] Inserting into pending_edits:", JSON.stringify(pendingEditData, null, 2));
 
@@ -304,7 +315,8 @@ export async function submitPoliticianEdit(
       return {
         success: false,
         error: error.message,
-        message: 'Failed to submit edit proposal.'
+        message: 'Failed to submit edit proposal.',
+        details: { message: error.message, details: error.details, hint: error.hint }
       };
     }
 
@@ -330,7 +342,8 @@ export async function submitPoliticianEdit(
     return {
       success: false,
       error: e.message || 'An unexpected error occurred.',
-      message: 'An unexpected error occurred while submitting the edit proposal.'
+      message: 'An unexpected error occurred while submitting the edit proposal.',
+      details: e.toString()
     };
   }
 }
@@ -350,31 +363,25 @@ export interface PoliticianHeaderFormData {
 }
 
 export async function submitPoliticianHeaderEditAction(
-  politicianId: string, // From URL, string
+  politicianId: string, 
   formData: PoliticianHeaderFormData,
-  userId: string, // This should be the auth user's UUID
+  userId: string, 
   isAdmin: boolean,
   changeReasonInput?: string
 ): Promise<SubmitEditReturnType | DirectUpdateReturnType> {
   const supabase = createSupabaseServerClient();
   const numericPoliticianId = parseInt(politicianId, 10);
 
-  console.log("[submitPoliticianHeaderEditAction] Called with:");
-  console.log("  politicianId (string from URL):", politicianId);
-  console.log("  numericPoliticianId (parsed):", numericPoliticianId);
-  console.log("  userId (auth user's UUID):", userId);
-  console.log("  isAdmin:", isAdmin);
-  // console.log("  formData:", JSON.stringify(formData, null, 2)); // Can be verbose
+  console.log("[submitPoliticianHeaderEditAction] Called with politicianId(string):", politicianId, "userId:", userId, "isAdmin:", isAdmin, "numericPoliticianId:", numericPoliticianId);
 
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!uuidRegex.test(userId)) {
-    console.error("[submitPoliticianHeaderEditAction] CRITICAL: userId parameter ('"+userId+"') does not look like a UUID.");
-    return { success: false, error: "Internal error: Invalid user identifier for action." };
+    console.warn("[submitPoliticianHeaderEditAction] Potential Issue: userId parameter ('"+userId+"') does not look like a UUID.");
   }
 
-  if (isAdmin && isNaN(numericPoliticianId)) {
-    console.error("[submitPoliticianHeaderEditAction] Admin path: politicianId ('"+politicianId+"') is not a valid number.");
-    return { success: false, error: "Invalid Politician ID for admin update." };
+  if (isNaN(numericPoliticianId)) {
+    console.error("[submitPoliticianHeaderEditAction] politicianId ('"+politicianId+"') is not a valid number after parseInt.");
+    return { success: false, error: "Invalid Politician ID." };
   }
 
   const changeReason = changeReasonInput || (isAdmin ? "Admin header update" : "User header update proposal");
@@ -391,14 +398,15 @@ export async function submitPoliticianHeaderEditAction(
       dataForStorage[typedKey] = (value === '' || value === undefined) ? null : value;
     }
   }
-  // console.log("[submitPoliticianHeaderEditAction] dataForStorage (after nullifying empty strings):", JSON.stringify(dataForStorage, null, 2));
+  console.log("[submitPoliticianHeaderEditAction] dataForStorage (payload for DB/pending_edits):", JSON.stringify(dataForStorage, null, 2));
 
 
   if (isAdmin) {
     const updateObjectForPoliticiansTable: Partial<Tables<'politicians'>['Row']> = {
-      ...dataForStorage, 
+      ...(dataForStorage as Partial<Tables<'politicians'>['Row']>), 
       updated_at: new Date().toISOString(),
     };
+    
     const finalUpdateObject = Object.fromEntries(
         Object.entries(updateObjectForPoliticiansTable).filter(([_, v]) => v !== undefined)
     );
@@ -414,7 +422,7 @@ export async function submitPoliticianHeaderEditAction(
 
     if (updateError) {
       console.error("[submitPoliticianHeaderEditAction] Admin Path: Error updating 'politicians' table:", updateError.message, updateError.details, updateError.hint);
-      return { success: false, error: updateError.message, message: 'Failed to update politician header.' };
+      return { success: false, error: updateError.message, message: 'Failed to update politician header.', details: updateError.details };
     }
     if (!updatedPolitician) {
       return { success: false, error: 'Politician not found after update.', message: 'Failed to retrieve politician after update.' };
@@ -426,7 +434,7 @@ export async function submitPoliticianHeaderEditAction(
       .insert({
         entity_type: 'Politician',
         entity_id: numericPoliticianId, 
-        data: dataForStorage,
+        data: dataForStorage, // This is the JSONB field
         submitter_id: userId, 
         approver_id: userId,  
         approved_at: new Date().toISOString(),
@@ -435,7 +443,7 @@ export async function submitPoliticianHeaderEditAction(
       });
 
     if (revisionError) {
-        console.warn("[submitPoliticianHeaderEditAction] Admin Path: Revision creation warning for header update:", revisionError.message);
+        console.warn("[submitPoliticianHeaderEditAction] Admin Path: Revision creation warning for header update:", revisionError.message, revisionError.details);
     }
 
     revalidatePath(`/politicians/${politicianId}`);
@@ -444,15 +452,15 @@ export async function submitPoliticianHeaderEditAction(
 
   } else {
     // NON-ADMIN PATH: Insert into 'pending_edits'
-    const pendingEditData = {
-      entity_type: 'Politician' as const,
-      entity_id: politicianId, 
-      proposed_data: dataForStorage,
+    const pendingEditData: Tables<'pending_edits'>['Insert'] = {
+      entity_type: 'Politician',
+      entity_id: String(politicianId), // Ensure entity_id is a string for pending_edits
+      proposed_data: dataForStorage, // This is the JSONB field
       change_reason: changeReason,
       proposer_id: userId, 
-      status: 'Pending' as const,
+      status: 'Pending',
     };
-    console.log("[submitPoliticianHeaderEditAction] Non-Admin Path. Inserting into 'pending_edits':", JSON.stringify(pendingEditData, null, 2));
+    console.log("[submitPoliticianHeaderEditAction] Non-Admin Path. Payload for 'pending_edits':", JSON.stringify(pendingEditData, null, 2));
 
     const { data, error } = await supabase
       .from('pending_edits')
@@ -462,33 +470,30 @@ export async function submitPoliticianHeaderEditAction(
 
     if (error) {
       console.error("[submitPoliticianHeaderEditAction] Non-Admin Path: Error inserting into 'pending_edits':", error.message, error.details, error.hint);
-      return { success: false, error: error.message, message: 'Failed to submit header edit proposal.' };
+      return { success: false, error: error.message, message: 'Failed to submit edit proposal.', details: { message: error.message, details: error.details, hint: error.hint } };
     }
     if (!data || !data.id) {
         return { success: false, error: 'Failed to retrieve ID for pending edit.', message: 'Submission partially succeeded but ID is missing.' };
     }
 
-    revalidatePath(`/politicians/${politicianId}`);
+    revalidatePath(`/politicians/${politicianId}`); // Revalidate the specific politician's page
     return { success: true, editId: data.id, message: 'Header edit proposal submitted for review.' };
   }
 }
 
 
 export async function submitFullPoliticianUpdate(
-  politicianId: string, // From URL, string
+  politicianId: string, 
   formData: PoliticianFormData,
   userId: string
 ): Promise<SubmitEditReturnType> {
   const supabase = createSupabaseServerClient();
 
-  console.log("[submitFullPoliticianUpdate] Called with:");
-  console.log("  politicianId:", politicianId);
-  console.log("  userId:", userId);
+  console.log("[submitFullPoliticianUpdate] Called with politicianId:", politicianId, "userId:", userId);
 
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!uuidRegex.test(userId)) {
-    console.error("[submitFullPoliticianUpdate] CRITICAL: userId parameter ('"+userId+"') does not look like a UUID.");
-    return { success: false, error: "Internal error: Invalid user identifier for full update." };
+    console.warn("[submitFullPoliticianUpdate] Potential Issue: userId parameter ('"+userId+"') does not look like a UUID.");
   }
 
   try {
@@ -502,32 +507,36 @@ export async function submitFullPoliticianUpdate(
 
     allFormKeys.forEach(key => {
         let value = formData[key];
+        // Convert undefined to null for JSONB compatibility and DB storage.
         if (value === undefined) value = null; 
 
         let dbKey = key as string; 
         let finalValue = value;
         
+        // Mapping form keys to DB column names if they differ
         if (key === 'education_details') dbKey = 'education';
         else if (key === 'biography') dbKey = 'bio';
         else if (key === 'criminal_records') dbKey = 'public_criminal_records';
         
+        // Stringify arrays/objects intended for TEXT or JSONB columns that expect stringified JSON
         if ((dbKey === 'public_criminal_records' || dbKey === 'asset_declarations' || dbKey === 'education' || dbKey === 'political_journey') &&
             (Array.isArray(value) || (typeof value === 'object' && value !== null))) {
             finalValue = JSON.stringify(value);
-        } else if (key === 'contact_information' || key === 'social_media_handles') {
-            finalValue = (typeof value === 'object' && value !== null) ? value : {};
+        } else if ((key === 'contact_information' || key === 'social_media_handles') && (typeof value === 'object' && value !== null)) {
+             // These are typically JSONB in 'politicians' but might be part of 'proposed_data'
+            finalValue = value; // Keep as object for proposed_data JSONB
         }
         dataForProposedEdit[dbKey] = finalValue;
     });
 
 
-    const pendingEditData = {
-      entity_type: 'Politician' as const,
-      entity_id: politicianId, 
-      proposed_data: dataForProposedEdit,
+    const pendingEditData: Tables<'pending_edits'>['Insert'] = {
+      entity_type: 'Politician',
+      entity_id: String(politicianId), // Ensure politicianId is explicitly string
+      proposed_data: dataForProposedEdit, // This is JSONB
       change_reason: "User submitted full profile update via edit page.",
       proposer_id: userId, 
-      status: 'Pending' as const,
+      status: 'Pending',
     };
     console.log("[submitFullPoliticianUpdate] Inserting into pending_edits:", JSON.stringify(pendingEditData, null, 2));
 
@@ -544,6 +553,7 @@ export async function submitFullPoliticianUpdate(
         success: false,
         error: error.message,
         message: 'Failed to submit profile update for review.',
+        details: { message: error.message, details: error.details, hint: error.hint }
       };
     }
 
@@ -570,13 +580,14 @@ export async function submitFullPoliticianUpdate(
       success: false,
       error: e.message || 'An unexpected error occurred.',
       message: 'An unexpected error occurred while submitting the profile update.',
+      details: e.toString()
     };
   }
 }
 
 
 export async function denyPoliticianAction(
-  editId: number, // pending_edits.id is number
+  editId: number, 
   adminId: string,
   reason?: string
 ): Promise<{ success: boolean; message: string; error?: string }> {
@@ -585,8 +596,7 @@ export async function denyPoliticianAction(
   console.log("[denyPoliticianAction] Called with adminId:", adminId, "editId:", editId);
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!uuidRegex.test(adminId)) {
-    console.error("[denyPoliticianAction] CRITICAL: adminId parameter ('"+adminId+"') does not look like a UUID.");
-    // return { success: false, message: "Internal error: Invalid admin identifier." };
+    console.warn("[denyPoliticianAction] Potential Issue: adminId parameter ('"+adminId+"') does not look like a UUID.");
   }
 
   try {
@@ -631,5 +641,3 @@ export async function denyPoliticianAction(
     return { success: false, message: `An unexpected error occurred: ${e.message}`, error: e.toString() };
   }
 }
-
-    
