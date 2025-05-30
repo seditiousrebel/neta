@@ -1,6 +1,6 @@
 import { Pencil } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useMobile } from '@/hooks/use-mobile';
+import { useIsMobile } from '@/hooks/use-mobile'; // Corrected import
 import { cn } from '@/lib/utils';
 
 interface EditButtonProps {
@@ -9,7 +9,7 @@ interface EditButtonProps {
 }
 
 export function EditButton({ onClick, className }: EditButtonProps) {
-  const isMobile = useMobile();
+  const isMobile = useIsMobile(); // Corrected usage
 
   return (
     <TooltipProvider>
