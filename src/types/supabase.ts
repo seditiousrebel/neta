@@ -36,6 +36,48 @@ export type Database = {
         }
         Relationships: []
       }
+      bill_sponsors: {
+        Row: {
+          bill_id: number
+          created_at: string | null
+          politician_id: number
+          sponsored_at: string | null
+          sponsorship_role: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          bill_id: number
+          created_at?: string | null
+          politician_id: number
+          sponsored_at?: string | null
+          sponsorship_role?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          bill_id?: number
+          created_at?: string | null
+          politician_id?: number
+          sponsored_at?: string | null
+          sponsorship_role?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_sponsors_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "legislative_bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_sponsors_politician_id_fkey"
+            columns: ["politician_id"]
+            isOneToOne: false
+            referencedRelation: "politicians"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bill_votes: {
         Row: {
           bill_id: number
@@ -121,6 +163,13 @@ export type Database = {
             columns: ["committee_id"]
             isOneToOne: false
             referencedRelation: "committees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "committee_memberships_politician_id_fkey"
+            columns: ["politician_id"]
+            isOneToOne: false
+            referencedRelation: "politicians"
             referencedColumns: ["id"]
           },
         ]
@@ -508,7 +557,6 @@ export type Database = {
           parliamentary_stage:
             | Database["public"]["Enums"]["bill_parliamentary_stage_enum"]
             | null
-          sponsorship_details: Json | null
           status: Database["public"]["Enums"]["bill_status"]
           summary: string | null
           text_asset_id: number | null
@@ -526,7 +574,6 @@ export type Database = {
           parliamentary_stage?:
             | Database["public"]["Enums"]["bill_parliamentary_stage_enum"]
             | null
-          sponsorship_details?: Json | null
           status?: Database["public"]["Enums"]["bill_status"]
           summary?: string | null
           text_asset_id?: number | null
@@ -544,7 +591,6 @@ export type Database = {
           parliamentary_stage?:
             | Database["public"]["Enums"]["bill_parliamentary_stage_enum"]
             | null
-          sponsorship_details?: Json | null
           status?: Database["public"]["Enums"]["bill_status"]
           summary?: string | null
           text_asset_id?: number | null
@@ -921,7 +967,22 @@ export type Database = {
           start_date?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "party_alliances_party_a_id_fkey"
+            columns: ["party_a_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_alliances_party_b_id_fkey"
+            columns: ["party_b_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       party_election_results: {
         Row: {
@@ -973,6 +1034,13 @@ export type Database = {
             columns: ["election_id"]
             isOneToOne: false
             referencedRelation: "elections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_election_results_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
             referencedColumns: ["id"]
           },
         ]
@@ -1056,7 +1124,22 @@ export type Database = {
           split_date?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "party_splits_new_party_id_fkey"
+            columns: ["new_party_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_splits_original_party_id_fkey"
+            columns: ["original_party_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pending_edits: {
         Row: {
@@ -1500,6 +1583,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "promises_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "promises_politician_id_fkey"
             columns: ["politician_id"]
             isOneToOne: false
@@ -1623,7 +1713,15 @@ export type Database = {
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "users_avatar_asset_id_fkey"
+            columns: ["avatar_asset_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
