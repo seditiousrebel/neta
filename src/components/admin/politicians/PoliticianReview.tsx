@@ -1,7 +1,7 @@
 // src/components/admin/politicians/PoliticianReview.tsx
 "use client";
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useEffect, useMemo } from 'react'; // Added useMemo
 import {
   Dialog,
   DialogContent,
@@ -21,15 +21,20 @@ import {
   approveNewPoliticianAction 
 } from "@/lib/actions/moderation.actions";
 import type { AdminPendingEdit } from '@/types/entities';
-import type { PoliticianFormData } from '@/components/contribute/PoliticianForm'; // Using the form data type
+import type { PoliticianFormData } from '@/components/contribute/PoliticianForm';
+import { getPoliticianById } from '@/lib/supabase/politicians';
+import PoliticianDiff from '@/components/admin/politicians/PoliticianDiff';
+import { Skeleton } from '@/components/ui/skeleton';
+import { getPublicUrlForMediaAsset } from '@/lib/uploadUtils'; // Import for photo URL
+import Image from 'next/image'; // For optimized image rendering
 
 interface PoliticianReviewProps {
   edit: AdminPendingEdit;
-  adminId: string; // For logging or specific actions if needed later
-  onActionComplete?: () => void; // Callback after approve/deny
+  adminId: string; 
+  onActionComplete?: () => void;
 }
 
-// Helper to render individual fields
+// Helper to render individual fields (DataField component remains unchanged)
 const DataField: React.FC<{ label: string; value: any; isJson?: boolean }> = ({ label, value, isJson }) => {
   let displayValue = value;
   if (value === null || value === undefined || value === '') {
@@ -78,7 +83,81 @@ const PoliticianReview: React.FC<PoliticianReviewProps> = ({ edit, adminId, onAc
   const [isPending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const proposedData = edit.proposed_data as Partial<PoliticianFormData>; // Cast to allow partial data
+  const [currentPoliticianData, setCurrentPoliticianData] = useState<Partial<PoliticianFormData> | null>(null);
+  const [isLoadingCurrentData, setIsLoadingCurrentData] = useState(false);
+  const [fetchErrorCurrentData, setFetchErrorCurrentData] = useState<string | null>(null);
+
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [isPhotoLoading, setIsPhotoLoading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  const proposedData = edit.proposed_data as Partial<PoliticianFormData>;
+  const isEditOfExistingEntity = !!edit.entity_id;
+
+  // Memoize photo_asset_id to prevent unnecessary useEffect runs if proposedData object changes but id remains same
+  const photoAssetIdFromProposedData = useMemo(() => proposedData?.photo_asset_id, [proposedData?.photo_asset_id]);
+
+  useEffect(() => {
+    const fetchAndSetPhotoUrl = async (assetId: string) => {
+      setIsPhotoLoading(true);
+      setPhotoError(null);
+      try {
+        const url = await getPublicUrlForMediaAsset(assetId);
+        setPhotoUrl(url);
+        if (!url) {
+          setPhotoError("Photo not found or URL could not be generated.");
+        }
+      } catch (error: any) {
+        console.error("Error fetching photo URL:", error);
+        setPhotoError(error.message || "Error fetching photo.");
+      } finally {
+        setIsPhotoLoading(false);
+      }
+    };
+
+    if (isOpen && photoAssetIdFromProposedData) {
+      fetchAndSetPhotoUrl(photoAssetIdFromProposedData);
+    } else if (!isOpen) {
+      setPhotoUrl(null); // Reset photo URL when dialog closes
+      setIsPhotoLoading(false);
+      setPhotoError(null);
+    }
+  }, [isOpen, photoAssetIdFromProposedData]);
+
+  useEffect(() => {
+    // Fetch current politician data for diff view
+    if (isOpen && isEditOfExistingEntity && !currentPoliticianData && !isLoadingCurrentData) {
+      const fetchCurrentData = async () => {
+        setIsLoadingCurrentData(true);
+        setFetchErrorCurrentData(null);
+        try {
+          if (edit.entity_id) {
+            const data = await getPoliticianById(edit.entity_id);
+            if (data) {
+              setCurrentPoliticianData(data);
+            } else {
+              setFetchErrorCurrentData("Could not load current politician data. It might have been deleted.");
+            }
+          } else {
+             setFetchErrorCurrentData("Entity ID is missing, cannot fetch current data.");
+          }
+        } catch (error: any) {
+          console.error("Error fetching current politician data:", error);
+          setFetchErrorCurrentData(error.message || "An unexpected error occurred while fetching current data.");
+        } finally {
+          setIsLoadingCurrentData(false);
+        }
+      };
+      fetchCurrentData();
+    } else if (!isOpen) {
+      // Reset when dialog is closed
+      setCurrentPoliticianData(null);
+      setIsLoadingCurrentData(false);
+      setFetchErrorCurrentData(null);
+      setActionError(null); // Also reset action error
+    }
+  }, [isOpen, isEditOfExistingEntity, edit.entity_id, currentPoliticianData, isLoadingCurrentData]);
+
 
   const handleApprove = async () => {
     setActionError(null);
@@ -134,55 +213,83 @@ const PoliticianReview: React.FC<PoliticianReviewProps> = ({ edit, adminId, onAc
         </DialogHeader>
 
         <ScrollArea className="max-h-[60vh] p-4 border rounded-md">
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold mb-2 border-b pb-1">Proposed Data</h3>
-            
-            {proposedData.name && <DataField label="Name (English)" value={proposedData.name} />}
-            {proposedData.name_nepali && <DataField label="Name (Nepali)" value={proposedData.name_nepali} />}
-            {proposedData.dob && <DataField label="Date of Birth (BS, YYYY-MM-DD)" value={proposedData.dob} />}
-            {proposedData.gender && <DataField label="Gender" value={proposedData.gender} />}
-
-            {proposedData.photo_asset_id && (
-              <div className="mb-3">
-                <h4 className="font-semibold text-sm">Photo Asset ID:</h4>
-                <p className="text-sm">{proposedData.photo_asset_id}</p>
-                {/* TODO: Implement image preview using a utility like getPublicUrl(assetId) */}
-                <div className="mt-1 p-2 border rounded text-xs bg-gray-100 dark:bg-gray-800">
-                  [Image Preview Placeholder for asset_id: {proposedData.photo_asset_id}]
-                  <br />
-                  (Requires `getPublicUrl(assetId)` utility and `<Image>` component)
+          {isEditOfExistingEntity ? (
+            // Displaying Diff for existing politician
+            isLoadingCurrentData ? (
+              <div className="space-y-4">
+                <Skeleton className="h-8 w-1/2" />
+                <Skeleton className="h-6 w-full" />
+                <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-20 w-full" />
+                <p className="text-center text-muted-foreground">Loading current data for comparison...</p>
+              </div>
+            ) : fetchErrorCurrentData ? (
+              <div className="text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900 p-3 rounded-md">
+                Error loading current data: {fetchErrorCurrentData}
+              </div>
+            ) : currentPoliticianData ? (
+              <PoliticianDiff oldData={currentPoliticianData} newData={proposedData as PoliticianFormData} />
+            ) : (
+              <p className="text-center text-muted-foreground">Could not load current data to show differences.</p>
+            )
+          ) : (
+            // Displaying proposed data directly (for new politician)
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold mb-2 border-b pb-1">Proposed Data (New Politician)</h3>
+              
+              {/* Photo Preview Section for New Politician */}
+              {photoAssetIdFromProposedData && (
+                <div className="mb-4 p-2 border rounded-md">
+                  <h4 className="font-semibold text-sm mb-1">Proposed Photo:</h4>
+                  {isPhotoLoading && <Skeleton className="w-32 h-32 rounded-md" />}
+                  {photoError && <p className="text-xs text-red-500">Error: {photoError}</p>}
+                  {photoUrl && !isPhotoLoading && !photoError && (
+                    <Image 
+                      src={photoUrl} 
+                      alt="Proposed Politician Photo" 
+                      width={128} 
+                      height={128} 
+                      className="rounded-md object-cover" 
+                    />
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">Asset ID: {photoAssetIdFromProposedData}</p>
                 </div>
-              </div>
-            )}
+              )}
 
-            {proposedData.biography && <DataField label="Biography" value={proposedData.biography} />}
-            
-            <DataField label="Education Details" value={proposedData.education_details} isJson />
-            <DataField label="Political Journey" value={proposedData.political_journey} isJson />
-            <DataField label="Criminal Records" value={proposedData.criminal_records} isJson />
-            <DataField label="Asset Declarations" value={proposedData.asset_declarations} isJson />
+              {proposedData.name && <DataField label="Name (English)" value={proposedData.name} />}
+              {proposedData.name_nepali && <DataField label="Name (Nepali)" value={proposedData.name_nepali} />}
+              {proposedData.dob && <DataField label="Date of Birth (BS, YYYY-MM-DD)" value={proposedData.dob} />}
+              {proposedData.gender && <DataField label="Gender" value={proposedData.gender} />}
+              {/* Removed direct display of photo_asset_id string here as it's covered by the preview block */}
+              {proposedData.biography && <DataField label="Biography" value={proposedData.biography} />}
+              <DataField label="Education Details" value={proposedData.education_details} isJson />
+              <DataField label="Political Journey" value={proposedData.political_journey} isJson />
+              <DataField label="Criminal Records" value={proposedData.criminal_records} isJson />
+              <DataField label="Asset Declarations" value={proposedData.asset_declarations} isJson />
 
-            {proposedData.contact_information && (
-              <div>
-                <h4 className="font-semibold text-md my-2 border-b pb-1">Contact Information</h4>
-                <DataField label="Email" value={proposedData.contact_information.email} />
-                <DataField label="Phone" value={proposedData.contact_information.phone} />
-                <DataField label="Address" value={proposedData.contact_information.address} />
-              </div>
-            )}
+              {proposedData.contact_information && (
+                <div>
+                  <h4 className="font-semibold text-md my-2 border-b pb-1">Contact Information</h4>
+                  <DataField label="Email" value={proposedData.contact_information.email} />
+                  <DataField label="Phone" value={proposedData.contact_information.phone} />
+                  <DataField label="Address" value={proposedData.contact_information.address} />
+                </div>
+              )}
 
-            {proposedData.social_media_handles && (
-              <div>
-                <h4 className="font-semibold text-md my-2 border-b pb-1">Social Media</h4>
-                <DataField label="Twitter" value={proposedData.social_media_handles.twitter} />
-                <DataField label="Facebook" value={proposedData.social_media_handles.facebook} />
-                <DataField label="Instagram" value={proposedData.social_media_handles.instagram} />
-              </div>
-            )}
-            
-            <div className="mt-4 pt-4 border-t">
-              <h4 className="font-semibold text-sm mb-2">Quick Google Search:</h4>
-              <ul className="list-disc list-inside space-y-1">
+              {proposedData.social_media_handles && (
+                <div>
+                  <h4 className="font-semibold text-md my-2 border-b pb-1">Social Media</h4>
+                  <DataField label="Twitter" value={proposedData.social_media_handles.twitter} />
+                  <DataField label="Facebook" value={proposedData.social_media_handles.facebook} />
+                  <DataField label="Instagram" value={proposedData.social_media_handles.instagram} />
+                </div>
+              )}
+            </div>
+          )}
+          {/* Common elements like Google Search links can be outside the conditional block if always shown */}
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="font-semibold text-sm mb-2">Quick Google Search:</h4>
+            <ul className="list-disc list-inside space-y-1">
                 <li>
                   <a href={`https://www.google.com/search?q=${encodeURIComponent(proposedData.name || '')}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
                     Search for "{proposedData.name}" on Google
