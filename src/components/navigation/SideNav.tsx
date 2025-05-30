@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, Heart, Bell, Users, LogIn, PlusCircle } from 'lucide-react'; // Added PlusCircle
+import { Home, Search, Heart, Bell, Users, LogIn } from 'lucide-react'; // Removed PlusCircle
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import {
@@ -35,7 +35,7 @@ const mainNavItems: NavItem[] = [
   { id: 'politicians', href: '/politicians', label: 'Politicians', icon: Users },
   { id: 'following', href: '/following', label: 'Following', icon: Heart, requiresAuth: true },
   { id: 'notifications', href: '/notifications', label: 'Notifications', icon: Bell, requiresAuth: true, badgeCount: 3 }, // Placeholder badge count
-  { id: 'contribute', href: '/contribute/politician', label: 'Contribute', icon: PlusCircle, requiresAuth: true },
+  // { id: 'contribute', href: '/contribute/politician', label: 'Contribute', icon: PlusCircle, requiresAuth: true }, // Removed
 ];
 
 const getInitials = (name?: string | null) => {

@@ -2,7 +2,7 @@
 // src/app/politicians/[id]/edit/page.tsx
 "use client";
 
-import React, { useState, useEffect, use } from 'react'; // Added 'use'
+import React, { useState, useEffect, use } from 'react';
 import PoliticianForm, { type PoliticianFormData } from '@/components/contribute/PoliticianForm';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
@@ -10,9 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
-import { getPoliticianById } from '@/lib/supabase/politicians'; // To fetch existing data
-import { submitFullPoliticianUpdate } from '@/lib/actions/politician.actions'; // New action
-import { useRouter, notFound } from 'next/navigation';
+import { getPoliticianById } from '@/lib/supabase/politicians';
+import { submitFullPoliticianUpdate } from '@/lib/actions/politician.actions';
+import { useRouter, notFound, useSearchParams } from 'next/navigation'; // Added useSearchParams
+
 
 interface EditPoliticianPageProps {
   params: { id: string };
@@ -21,7 +22,9 @@ interface EditPoliticianPageProps {
 const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsProp }) => {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const resolvedParams = use(paramsProp); // Unwrap the params
+  const searchParams = useSearchParams(); // For getting 'next' query param
+
+  const resolvedParams = use(paramsProp); 
   const politicianId = resolvedParams.id;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,7 +46,6 @@ const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsP
         setInitialData(data);
       } else {
         setError("Politician data not found or failed to load.");
-        // Optionally redirect or show a more permanent error
       }
       setIsLoadingInitialData(false);
     };
@@ -58,7 +60,7 @@ const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsP
   };
 
   const handleEditPreview = () => {
-    setPreviewData(null); // Go back to editing the form
+    setPreviewData(null); 
   };
 
   const handleConfirmSubmit = async () => {
@@ -81,7 +83,7 @@ const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsP
       
       const editId = String(result.editId);
       setSuccessInfo({ editId, message: `Edit submitted successfully! Your Edit ID is ${editId}. It will be reviewed by an admin.` });
-      setPreviewData(null); // Clear preview
+      setPreviewData(null); 
     } catch (err: any) {
       console.error("Submission error:", err);
       const errorMessage = err.message || "An unexpected error occurred.";
@@ -103,19 +105,21 @@ const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsP
   }
 
   if (!user) {
+    const nextPath = `/politicians/${politicianId}/edit`;
+    const loginUrl = `/auth/login?next=${encodeURIComponent(nextPath)}`;
     return (
       <div className="container mx-auto p-4 py-12 max-w-xl">
         <Alert variant="destructive">
           <AlertTitle>Access Denied</AlertTitle>
           <AlertDescription>
-            You must be logged in to edit politician profiles. Please <Link href={`/auth/login?next=/politicians/${politicianId}/edit`} className="font-semibold hover:underline">Login</Link> or <Link href="/auth/register" className="font-semibold hover:underline">Register</Link>.
+            You must be logged in to edit politician profiles. Please <Link href={loginUrl} className="font-semibold hover:underline">Login</Link> or <Link href="/auth/register" className="font-semibold hover:underline">Register</Link>.
           </AlertDescription>
         </Alert>
       </div>
     );
   }
 
-  if (!initialData && !isLoadingInitialData) {
+  if (!initialData && !isLoadingInitialData) { // Should be caught by notFound earlier if ID is bad, but good fallback
      return (
       <div className="container mx-auto p-4 py-12 max-w-xl">
         <Alert variant="destructive">
@@ -156,7 +160,7 @@ const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsP
       )}
 
       {successInfo && (
-        <Alert variant="default" className="mb-6 bg-green-50 border-green-200 text-green-700 [&>svg~*]:pl-7 [&>svg]:text-green-600">
+        <Alert variant="default" className="mb-6 bg-green-50 border-green-200 text-green-700 dark:bg-green-900/30 dark:border-green-700/50 dark:text-green-300 [&>svg~*]:pl-7 [&>svg]:text-green-600">
            <AlertTitle className="font-semibold">Edit Submitted!</AlertTitle>
           <AlertDescription>
             {successInfo.message}
@@ -210,7 +214,7 @@ const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsP
                 );
               }
                if (value === null || value === undefined || value === '') {
-                displayValue = <span className="italic text-muted-foreground">Not provided / Unchanged</span>;
+                displayValue = <span className="italic text-muted-foreground">Not provided / Unchanged</span> as unknown as string;
               } else {
                 displayValue = String(value);
               }
@@ -224,7 +228,7 @@ const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsP
                   <span className="text-sm text-foreground">{displayValue}</span>
                   {isChanged && originalValue !== undefined && (
                      <p className="text-xs text-orange-600 dark:text-orange-400 ml-2 pl-2 border-l-2 border-orange-300 dark:border-orange-500 mt-0.5">
-                        Original: <span className="italic">{JSON.stringify(originalValue, null, 2).length > 100 ? 'Complex value' : String(originalValue)}</span>
+                        Original: <span className="italic">{JSON.stringify(originalValue, null, 2).length > 100 ? 'Complex value (see current profile)' : String(originalValue)}</span>
                     </p>
                   )}
                 </div>
