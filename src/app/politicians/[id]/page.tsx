@@ -7,8 +7,8 @@ import { getPublicUrlForMediaAsset } from '@/lib/uploadUtils';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter, notFound, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import { useRouter, notFound } from 'next/navigation'; // Removed useSearchParams as it's not used here
+import Link from 'next/link'; // Corrected import
 import { Badge } from '@/components/ui/badge';
 import {
   User, Cake, VenetianMask, Info, Twitter, Facebook, Instagram, Globe, Mail, Phone, MapPin,
@@ -17,12 +17,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle as ModalTitle, DialogDescription as ModalDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'; // Alias DialogTitle for clarity
+import { Dialog, DialogContent, DialogHeader, DialogTitle as ModalTitle, DialogDescription as ModalDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import Overview from '@/components/politicians/profile/Overview';
 import CareerTimeline from '@/components/politicians/profile/CareerTimeline';
 import CriminalRecordsDisplay from '@/components/politicians/profile/CriminalRecordsDisplay';
 import { EditModal, EditModalProps, FieldType as ModalFieldType, EditorProps } from '@/components/wiki/EditModal';
-import { EditButton } from '@/components/wiki/EditButton';
+// EditButton no longer directly used in ProfileHeader for individual fields, but EditModal might use it internally if needed
+// import { EditButton } from '@/components/wiki/EditButton';
 import { RichTextEditor } from '@/components/wiki/RichTextEditor';
 import { DateEditor, DateEditorProps } from '@/components/wiki/DateEditor';
 import { CriminalRecordEditor, CriminalRecordEditorProps, type CriminalRecord } from '@/components/wiki/CriminalRecordEditor';
@@ -194,12 +195,13 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
 
 
   const openSingleFieldModal = (data: ModalContentData) => {
-    if (!user && data.fieldName !== 'login_prompt') {
+    if (!user && data.fieldName !== 'login_prompt') { // 'login_prompt' is a hypothetical bypass
       toast({
         title: "Authentication Required",
         description: "You need to be logged in to propose an edit.",
         variant: "destructive",
       });
+      // Potentially redirect to login, e.g., router.push(`/auth/login?next=${window.location.pathname}`);
       return;
     }
     if (!politician && data.fieldName !== 'login_prompt') {
@@ -216,6 +218,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
     }
 
     let currentValueForModal = data.currentValue;
+    // Ensure complex data types are parsed/prepared for their respective editors
     if (data.fieldName === 'public_criminal_records' || data.fieldName === 'asset_declarations') {
         if (typeof data.currentValue === 'string') {
             try {
@@ -225,7 +228,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                 currentValueForModal = [];
             }
         } else if (!Array.isArray(data.currentValue)) {
-            currentValueForModal = [];
+            currentValueForModal = []; // Default to empty array if not already an array and not a parsable string
         }
     }
 
@@ -236,7 +239,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
 
   const closeSingleFieldModal = () => {
     setIsSingleFieldModalOpen(false);
-    setSingleFieldModalData({});
+    setSingleFieldModalData({}); // Clear data when modal closes
   };
 
   const handleHeaderFormSubmit = async (formData: PoliticianHeaderFormData, changeReason?: string) => {
@@ -254,7 +257,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
         String(politician.id),
         formData,
         user.id,
-        user.role?.includes('Admin') ?? false,
+        user.role?.includes('Admin') ?? false, // Check for Admin role safely
         changeReason
     );
     setIsSubmittingHeader(false);
@@ -296,7 +299,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
   };
 
 
-  if (isLoading || authLoading || !politician) {
+  if (isLoading || authLoading || !politician) { // Added check for !politician
     return (
         <div className="container mx-auto p-4 py-8 text-center flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
             <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -307,24 +310,28 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
     );
   }
 
+  // This is the function that will be passed to ProfileHeader
+  const handleOpenHeaderEditModal = () => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to edit politician details.",
+        variant: "destructive",
+      });
+      router.push(`/auth/login?next=/politicians/${id}`);
+      return;
+    }
+    setIsHeaderEditModalOpen(true);
+  };
+
+
   return (
     <>
       <div className="container mx-auto p-4 py-8 md:py-12 max-w-5xl">
       <ProfileHeader
         politician={politician}
         photoUrl={photoUrl}
-        onOpenHeaderEditModal={() => {
-            if (!isAuthenticated) {
-                 toast({
-                    title: "Authentication Required",
-                    description: "Please log in to edit politician details.",
-                    variant: "destructive",
-                });
-                router.push(`/auth/login?next=/politicians/${id}`);
-                return;
-            }
-            setIsHeaderEditModalOpen(true)
-        }}
+        onOpenHeaderEditModal={handleOpenHeaderEditModal} // Pass the handler here
       />
 
         <div className="mt-10">
@@ -360,17 +367,22 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
               <Card className="shadow-sm">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>Career Timeline</CardTitle>
-                   <EditButton
+                   <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => openSingleFieldModal({
                             fieldName: 'political_journey',
                             fieldLabel: 'Political Journey / Career Entries',
                             currentValue: politician.political_journey || '',
-                            fieldType: 'textarea',
+                            fieldType: 'textarea', // or 'custom' if you have a specific editor
                             editorProps: { placeholder: 'Enter political journey using Markdown for structure.', rows: 10},
                             politicianId: String(politician.id),
                         })}
-                        className="static opacity-100"
-                    />
+                        className="static opacity-100" // Make always visible for testing
+                        title="Edit Political Journey"
+                    >
+                        <Pencil className="h-4 w-4" />
+                    </Button>
                 </CardHeader>
                 <CardContent className="pt-6">
                   <CareerTimeline politicalJourney={politician.political_journey ?? []} positions={politician.politician_positions ?? []} />
@@ -385,18 +397,23 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                     <CardTitle>Criminal Records</CardTitle>
                     <CardDescription>Information related to any reported criminal records.</CardDescription>
                   </div>
-                   <EditButton
+                   <Button
+                       variant="ghost"
+                       size="sm"
                        onClick={() => openSingleFieldModal({
                             fieldName: 'public_criminal_records',
                             fieldLabel: 'Criminal Records',
                             currentValue: politician.public_criminal_records,
                             fieldType: 'custom',
-                            editorComponent: CriminalRecordEditor,
+                            editorComponent: CriminalRecordEditor, // Ensure this is correct
                             editorProps: { /* if any specific props are needed */ },
                             politicianId: String(politician.id),
                         })}
                        className="static opacity-100"
-                    />
+                       title="Edit Criminal Records"
+                    >
+                         <Pencil className="h-4 w-4" />
+                    </Button>
                 </CardHeader>
                 <CardContent className="pt-6">
                   <CriminalRecordsDisplay criminalRecordsData={politician.public_criminal_records} />
@@ -411,18 +428,23 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                         <CardTitle>Asset Declarations</CardTitle>
                         <CardDescription>Yearly declarations of assets.</CardDescription>
                     </div>
-                    <EditButton
+                    <Button
+                       variant="ghost"
+                       size="sm"
                        onClick={() => openSingleFieldModal({
                             fieldName: 'asset_declarations',
                             fieldLabel: 'Asset Declarations',
                             currentValue: politician.asset_declarations,
                             fieldType: 'custom',
-                            editorComponent: AssetDeclarationEditor,
+                            editorComponent: AssetDeclarationEditor, // Ensure this is correct
                             editorProps: { /* if any specific props are needed */ },
                             politicianId: String(politician.id),
                         })}
                        className="static opacity-100"
-                    />
+                       title="Edit Asset Declarations"
+                    >
+                        <Pencil className="h-4 w-4" />
+                    </Button>
                 </CardHeader>
                 <CardContent className="pt-6">
                   <AssetDeclarationsDisplay assetDeclarationsData={politician.asset_declarations} />
@@ -453,11 +475,11 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
         fieldName={singleFieldModalData.fieldName || ''}
         fieldLabel={singleFieldModalData.fieldLabel || ''}
         currentValue={singleFieldModalData.currentValue}
-        fieldType={singleFieldModalData.fieldType as ModalFieldType}
+        fieldType={singleFieldModalData.fieldType as ModalFieldType} // Cast for safety
         editorComponent={singleFieldModalData.editorComponent}
         editorProps={singleFieldModalData.editorProps}
         fieldOptions={singleFieldModalData.fieldOptions}
-        isAdmin={user?.role?.includes('Admin')}
+        isAdmin={user?.role?.includes('Admin')} // Safely check for Admin role
       />
 
       {/* Header Edit Modal */}
@@ -467,8 +489,8 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                 <DialogHeader>
                     <ModalTitle>Edit Politician Header</ModalTitle>
                     <ModalDescription>
-                        Update the main details for {politician.name}. 
-                        {!user?.role?.includes('Admin') && " All changes will be submitted for review."}
+                        Update the main details for {politician.name}.
+                        {!(user?.role?.includes('Admin')) && " All changes will be submitted for review."}
                     </ModalDescription>
                 </DialogHeader>
                 <div className="flex-grow overflow-y-auto pr-2 py-4">
@@ -493,10 +515,10 @@ interface ProfileHeaderProps {
 }
 
 function ProfileHeader({ politician, photoUrl, onOpenHeaderEditModal }: ProfileHeaderProps) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth(); // We still need isAuthenticated for other elements like Follow button
   const { toast } = useToast();
-  const router = useRouter();
-  const [isFollowed, setIsFollowed] = useState(false);
+  const router = useRouter(); // Keep for potential future use even if not directly used now
+  const [isFollowed, setIsFollowed] = useState(false); // Example state, implement actual logic if needed
   const supabase = createSupabaseBrowserClient();
   const [partyLogoUrl, setPartyLogoUrl] = useState<string | null>(null);
 
@@ -637,11 +659,10 @@ function ProfileHeader({ politician, photoUrl, onOpenHeaderEditModal }: ProfileH
             <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-1 sm:mb-0">
                 {politician.name}
             </h1>
-            {isAuthenticated && (
-              <Button variant="outline" size="icon" onClick={onOpenHeaderEditModal} className="mt-2 sm:mt-0 sm:ml-4 self-center sm:self-auto" title="Edit Header Details">
-                  <Pencil className="h-4 w-4" />
-              </Button>
-            )}
+            {/* This button is now always rendered; auth check is in onOpenHeaderEditModal */}
+            <Button variant="outline" size="icon" onClick={onOpenHeaderEditModal} className="mt-2 sm:mt-0 sm:ml-4 self-center sm:self-auto" title="Edit Header Details">
+                <Pencil className="h-4 w-4" />
+            </Button>
         </div>
 
         {renderHeaderField("Nepali Name", politician.name_nepali)}
@@ -698,4 +719,5 @@ function ProfileHeader({ politician, photoUrl, onOpenHeaderEditModal }: ProfileH
     
 
     
+
 
