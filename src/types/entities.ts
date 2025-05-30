@@ -1,12 +1,12 @@
 
 export interface User {
   id: string;
-  name?: string | null; // Corresponds to full_name from public.users or auth metadata
+  name?: string | null;
   email?: string | null;
-  avatarUrl?: string | null; // URL from public.users.avatar_url or auth metadata
-  bio?: string | null; // From public.users.bio or auth metadata
-  role?: "User" | "Admin" | string | null; // Role from public.users
-  contributionPoints?: number | null; // From public.users
+  avatarUrl?: string | null;
+  bio?: string | null;
+  role?: "User" | "Admin" | string | null;
+  contributionPoints?: number | null;
 }
 
 export type EntityType = "politician" | "party" | "promise" | "bill";
@@ -26,7 +26,7 @@ export interface Party {
   platform?: string;
 }
 
-export interface PromiseItem { // Renamed from Promise to avoid conflict with JS Promise
+export interface PromiseItem {
   id:string;
   title: string;
   description: string;
@@ -38,7 +38,7 @@ export interface PromiseItem { // Renamed from Promise to avoid conflict with JS
 export interface LegislativeBill {
   id: string;
   title: string;
-  summary: string | null; // Made summary nullable based on usage in VotingHistory
+  summary: string | null;
   status: "proposed" | "passed" | "rejected" | "in_committee";
   sponsorId?: string; // Politician ID
   bill_number?: string | null;
@@ -51,39 +51,36 @@ export interface FeedItemData {
   title: string;
   summary: string;
   imageUrl?: string;
-  author?: string; // Could be Politician name, Party name, etc.
+  author?: string;
   timestamp: string; // ISO date string
   votes: number;
   userVote?: "up" | "down" | null;
   isFollowed: boolean;
 }
 
-// Types related to profile page data
 export interface UserBadge {
-  id: number; // badge id
+  id: number;
   name: string;
   description: string;
-  icon_asset_id?: number | null; // from badges table
-  awarded_at: string; // from user_badges table
-  icon_url?: string | null; // if you join with media_assets for icon
+  icon_asset_id?: number | null;
+  awarded_at: string;
+  icon_url?: string | null;
 }
 
 export interface UserContribution {
-  id: number; // pending_edit id
-  entity_type: string; // Database["public"]["Enums"]["entity_type"]
-  proposed_data: any; // JSON
-  status: string; // Database["public"]["Enums"]["edit_status"]
+  id: number;
+  entity_type: string;
+  proposed_data: any;
+  status: string;
   created_at: string;
   change_reason?: string | null;
-  proposer_id?: string; // Added from pending_edits
-  users?: { // For joined proposer data
+  proposer_id?: string;
+  users?: {
     email?: string | null;
     full_name?: string | null;
   } | null;
 }
 
-
-// Politician Directory Types
 export type PoliticianPhoto = {
   storage_path: string | null;
 };
@@ -92,8 +89,7 @@ export type PoliticianPartyForCard = {
   id: number;
   name: string;
   abbreviation: string | null;
-  media_assets?: PoliticianPhoto | null; // This specifically targets the logo via alias
-  logo?: PoliticianPhoto | null; // Added for consistency if logo is directly selected
+  media_assets?: PoliticianPhoto | null; // For party logo
 };
 
 export type PoliticianPartyMembershipForCard = {
@@ -111,28 +107,27 @@ export type PoliticianPositionForCard = {
   position_titles: PoliticianPositionTitleForCard | null;
 };
 
-// This is the main type for items in the politician directory list
-export type PoliticianCardData = {
-  id: number;
+// Main type for items in the politician directory list
+export type PoliticianSummary = { // Renamed from PoliticianCardData for clarity if used elsewhere
+  id: string; // Changed from number to string to match typical UUID usage or bigint string conversion
   name: string;
-  bio: string | null;
-  public_criminal_records: string | null;
-  fts_vector?: any;
-  media_assets: PoliticianPhoto | null; // For politician's main photo
-  party_memberships: PoliticianPartyMembershipForCard[] | null;
-  politician_positions: PoliticianPositionForCard[] | null;
-  is_followed_by_user?: boolean;
-  vote_score: number;
+  name_nepali?: string | null;
+  photo_url?: string | null;
+  current_party_name?: string | null;
+  current_position_title?: string | null;
+  public_criminal_records?: string | null; // Added this field
+  vote_score?: number; // Added this field
 };
+
 
 // For filter dropdowns
 export interface PartyFilterOption {
-  id: number;
+  id: string; // Changed to string to accommodate potential bigint IDs from DB
   name: string;
 }
 
 export interface ProvinceFilterOption {
-  id: number;
+  id: string; // Changed to string
   name: string;
 }
 
@@ -143,10 +138,8 @@ export type PoliticianFiltersState = {
   hasCriminalRecord?: "any" | "yes" | "no" | null;
 };
 
-
-// Types for Detailed Politician Page
 export type PoliticianMediaAsset = {
-  id?: number; // Made optional as it might not always be fetched or relevant for all media assets
+  id?: number;
   storage_path: string | null;
   alt_text?: string | null;
   caption?: string | null;
@@ -192,7 +185,7 @@ export type PoliticianPosition = {
 
 export type PoliticianBillVote = {
   id: number;
-  vote: string; // Assuming 'Yea', 'Nay', 'Abstain' from an ENUM
+  vote: string;
   voted_at: string;
   legislative_bills: LegislativeBill | null;
 };
@@ -201,14 +194,14 @@ export type PoliticianPromise = {
   id: number;
   title: string;
   description?: string | null;
-  status: string; // Assuming 'Pending', 'Fulfilled', 'Broken' from an ENUM
+  status: string;
   due_date?: string | null;
-  evidence_links?: any | null; // JSON
+  evidence_links?: any | null;
 };
 
 export type PoliticianCareerEntry = {
   id: number;
-  entry_type: string; // e.g., 'Position Held', 'Education' - from an ENUM
+  entry_type: string;
   title: string;
   organization_name?: string | null;
   start_date?: string | null;
@@ -222,12 +215,13 @@ export type DetailedPolitician = {
   name_nepali?: string | null;
   is_independent: boolean;
   dob?: string | null;
-  gender?: string | null; // From gender_enum
+  dob_bs?: string | null;
+  gender?: string | null;
   bio?: string | null;
-  education?: string | null;
-  political_journey?: string | null;
-  public_criminal_records?: string | null;
-  asset_declarations?: string | null;
+  education?: string | null; // Stored as JSONB string, consider parsing
+  political_journey?: PoliticianCareerEntry[] | string | null; // JSONB string or parsed array
+  public_criminal_records?: string | null; // JSONB string or parsed array
+  asset_declarations?: string | null; // JSONB string or parsed array
   twitter_handle?: string | null;
   facebook_profile_url?: string | null;
   contact_email?: string | null;
@@ -237,7 +231,7 @@ export type DetailedPolitician = {
   province_id?: number | null;
   created_at: string;
   updated_at: string;
-  media_assets: PoliticianMediaAsset | null; // Main photo
+  media_assets: PoliticianMediaAsset | null;
   party_memberships: PoliticianPartyMembership[] | null;
   politician_positions: PoliticianPosition[] | null;
   bill_votes: PoliticianBillVote[] | null;
@@ -245,22 +239,19 @@ export type DetailedPolitician = {
   politician_career_entries: PoliticianCareerEntry[] | null;
 };
 
-// Admin related types
 export type AdminPendingEdit = {
   id: number;
   entity_type: string;
-  entity_id: number | string | null; // ID of the entity being edited, can be number or string (UUID)
-  proposed_data: any; // JSON; consider a more specific type if possible
+  entity_id: number | string | null;
+  proposed_data: any;
   change_reason: string | null;
   created_at: string;
   proposer_id: string;
-  status: string; // e.g., 'Pending', 'Approved', 'Denied'
-  admin_feedback: string | null; // Reason for approval/denial by admin
-  users: { // Proposer details
+  status: string;
+  admin_feedback: string | null;
+  users: {
     id: string;
     email: string | null;
     full_name: string | null;
   } | null;
 };
-
-    

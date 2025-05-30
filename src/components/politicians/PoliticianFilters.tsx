@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Search as SearchIcon, X, Landmark, FileWarning } from 'lucide-react'; // Added Landmark, FileWarning
+import { Search as SearchIcon, X, Landmark, FileWarning } from 'lucide-react';
 import type { PartyFilterOption, ProvinceFilterOption } from '@/types/entities';
 
 interface PoliticianFiltersProps {
@@ -15,10 +15,8 @@ interface PoliticianFiltersProps {
   initialProvinces: ProvinceFilterOption[];
 }
 
-// Basic debounce function
 function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
   let timeout: ReturnType<typeof setTimeout> | null = null;
-
   const debounced = (...args: Parameters<F>) => {
     if (timeout !== null) {
       clearTimeout(timeout);
@@ -26,33 +24,29 @@ function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
     }
     timeout = setTimeout(() => func(...args), waitFor);
   };
-
   return debounced as (...args: Parameters<F>) => ReturnType<F>;
 }
-
 
 export default function PoliticianFilters({ initialParties, initialProvinces }: PoliticianFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
   const [selectedParty, setSelectedParty] = useState(searchParams.get('partyId') || '');
   const [selectedProvince, setSelectedProvince] = useState(searchParams.get('provinceId') || '');
-  const [selectedCriminalRecord, setSelectedCriminalRecord] = useState(searchParams.get('hasCriminalRecord') || 'any');
+  const [selectedCriminalRecord, setSelectedCriminalRecord] = useState(searchParams.get('has_criminal_record') || 'any');
 
   const createQueryString = useCallback(
     (paramsToUpdate: Record<string, string | null>) => {
       const currentParams = new URLSearchParams(Array.from(searchParams.entries()));
-      
       Object.entries(paramsToUpdate).forEach(([name, value]) => {
-        if (value && value !== 'any') { // "any" means no filter for criminal record
+        if (value && value !== 'any' && value !== 'all') {
           currentParams.set(name, value);
         } else {
           currentParams.delete(name);
         }
       });
-      
       currentParams.set('page', '1'); // Reset page to 1 whenever filters change
       return currentParams.toString();
     },
@@ -64,15 +58,15 @@ export default function PoliticianFilters({ initialParties, initialProvinces }: 
   };
   
   const debouncedSearchUpdate = useCallback(debounce((term: string) => {
-    updateUrlParams({ search: term || null });
-  }, 500), [pathname, createQueryString]);
+    updateUrlParams({ q: term || null });
+  }, 500), [pathname, createQueryString, updateUrlParams]);
 
 
   useEffect(() => {
-    setSearchTerm(searchParams.get('search') || '');
+    setSearchTerm(searchParams.get('q') || '');
     setSelectedParty(searchParams.get('partyId') || '');
     setSelectedProvince(searchParams.get('provinceId') || '');
-    setSelectedCriminalRecord(searchParams.get('hasCriminalRecord') || 'any');
+    setSelectedCriminalRecord(searchParams.get('has_criminal_record') || 'any');
   }, [searchParams]);
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -93,7 +87,7 @@ export default function PoliticianFilters({ initialParties, initialProvinces }: 
   
   const handleCriminalRecordChange = (value: string) => {
     setSelectedCriminalRecord(value);
-    updateUrlParams({ hasCriminalRecord: value === 'any' ? null : value });
+    updateUrlParams({ has_criminal_record: value === 'any' ? null : value });
   };
 
   const clearFilters = () => {
@@ -107,8 +101,8 @@ export default function PoliticianFilters({ initialParties, initialProvinces }: 
   const hasActiveFilters = !!searchTerm || !!selectedParty || !!selectedProvince || selectedCriminalRecord !== 'any';
 
   return (
-    <div className="space-y-6 p-4 md:p-6 bg-card border rounded-lg shadow">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 items-end"> {/* Adjusted to 4 columns for new filter */}
+    <div className="space-y-6 p-4 md:p-6 bg-card border rounded-lg shadow mb-8">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 items-end">
         <div className="space-y-1.5">
           <Label htmlFor="search-politicians">Search by Name/Keyword</Label>
           <div className="relative">
@@ -133,7 +127,7 @@ export default function PoliticianFilters({ initialParties, initialProvinces }: 
             <SelectContent>
               <SelectItem value="all">All Parties</SelectItem>
               {initialParties.map((party) => (
-                <SelectItem key={party.id} value={String(party.id)}>
+                <SelectItem key={party.id} value={party.id}>
                   {party.name}
                 </SelectItem>
               ))}
@@ -151,7 +145,7 @@ export default function PoliticianFilters({ initialParties, initialProvinces }: 
             <SelectContent>
               <SelectItem value="all">All Provinces</SelectItem>
               {initialProvinces.map((province) => (
-                <SelectItem key={province.id} value={String(province.id)}>
+                <SelectItem key={province.id} value={province.id}>
                   {province.name}
                 </SelectItem>
               ))}
