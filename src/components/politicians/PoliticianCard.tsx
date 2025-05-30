@@ -1,3 +1,4 @@
+
 // src/components/politicians/PoliticianCard.tsx
 "use client";
 
@@ -154,10 +155,26 @@ const PoliticianCard: React.FC<PoliticianCardProps> = ({ politician }) => {
         await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
       } catch (error) {
         console.error('Error sharing:', error);
-        navigator.clipboard.writeText(shareUrl).then(() => alert('Profile link copied to clipboard!'));
+        // Fallback to copying link if share API fails or is permission denied
+        navigator.clipboard.writeText(shareUrl)
+          .then(() => {
+            toast({ title: "Link Copied!", description: "Profile link copied to clipboard." });
+          })
+          .catch(copyError => {
+            console.error('Error copying link to clipboard:', copyError);
+            toast({ title: "Share Failed", description: "Could not share or copy link.", variant: "destructive" });
+          });
       }
     } else {
-      navigator.clipboard.writeText(shareUrl).then(() => alert('Profile link copied to clipboard!'));
+      // Fallback for browsers that don't support navigator.share
+      navigator.clipboard.writeText(shareUrl)
+        .then(() => {
+          toast({ title: "Link Copied!", description: "Profile link copied to clipboard." });
+        })
+        .catch(copyError => {
+          console.error('Error copying link to clipboard:', copyError);
+          toast({ title: "Share Failed", description: "Could not copy link.", variant: "destructive" });
+        });
     }
   };
 
