@@ -127,7 +127,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
   const resolvedServerParams = use(serverParamsProp);
   const id = resolvedServerParams.id;
 
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -313,7 +313,18 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
       <ProfileHeader
         politician={politician}
         photoUrl={photoUrl}
-        onOpenHeaderEditModal={() => setIsHeaderEditModalOpen(true)}
+        onOpenHeaderEditModal={() => {
+            if (!isAuthenticated) {
+                 toast({
+                    title: "Authentication Required",
+                    description: "Please log in to edit politician details.",
+                    variant: "destructive",
+                });
+                router.push(`/auth/login?next=/politicians/${id}`);
+                return;
+            }
+            setIsHeaderEditModalOpen(true)
+        }}
       />
 
         <div className="mt-10">
@@ -478,12 +489,13 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
 interface ProfileHeaderProps {
   politician: DetailedPolitician;
   photoUrl: string | null;
-  onOpenHeaderEditModal: () => void; // Changed from onOpenModal to be specific
+  onOpenHeaderEditModal: () => void;
 }
 
 function ProfileHeader({ politician, photoUrl, onOpenHeaderEditModal }: ProfileHeaderProps) {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
   const [isFollowed, setIsFollowed] = useState(false);
   const supabase = createSupabaseBrowserClient();
   const [partyLogoUrl, setPartyLogoUrl] = useState<string | null>(null);
@@ -554,15 +566,7 @@ function ProfileHeader({ politician, photoUrl, onOpenHeaderEditModal }: ProfileH
     icon?: React.ReactNode
   ) => {
     if (value === undefined || value === null || String(value).trim() === '') {
-        return (
-          <div className="flex items-start text-sm text-gray-700 dark:text-gray-300 mb-1.5">
-            {icon && React.cloneElement(icon as React.ReactElement, { className: "h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" })}
-            <span className="font-semibold min-w-[100px] sm:min-w-[120px]">{label}:</span>
-            <div className="ml-2 break-words flex-grow">
-              <span className="italic text-muted-foreground">Not set</span>
-            </div>
-          </div>
-        );
+        return null; // Do not render the field if the value is not set
     }
     const displayValue = String(value ?? '');
 
@@ -584,6 +588,10 @@ function ProfileHeader({ politician, photoUrl, onOpenHeaderEditModal }: ProfileH
     urlPrefix?: string
   ) => {
     if (!value && !IconComponent) return null;
+    if (!value) { // If value is not set, don't render the link
+        return null;
+    }
+
 
     let href = value || '#';
     if (urlPrefix && value) {
@@ -599,9 +607,6 @@ function ProfileHeader({ politician, photoUrl, onOpenHeaderEditModal }: ProfileH
                 <IconComponent className="h-5 w-5" />
             </a>
         )}
-        {IconComponent && !value && (
-            <span className="text-muted-foreground p-1"><IconComponent className="h-5 w-5 opacity-50" /></span>
-        )}
       </div>
     );
   };
@@ -610,7 +615,6 @@ function ProfileHeader({ politician, photoUrl, onOpenHeaderEditModal }: ProfileH
   return (
     <header className="relative group flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8 mb-8 pb-8 border-b border-gray-200 dark:border-gray-700">
       <div className="relative w-36 h-36 md:w-48 md:h-48 rounded-full overflow-hidden shadow-xl border-4 border-white dark:border-gray-800 flex-shrink-0 group/photo">
-        {/* EditButton for photo can be part of the main edit flow now */}
         {photoUrl ? (
           <Image
             src={photoUrl}
@@ -633,9 +637,11 @@ function ProfileHeader({ politician, photoUrl, onOpenHeaderEditModal }: ProfileH
             <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-1 sm:mb-0">
                 {politician.name}
             </h1>
-             <Button variant="outline" size="icon" onClick={onOpenHeaderEditModal} className="mt-2 sm:mt-0 sm:ml-4 self-center sm:self-auto" title="Edit Header Details">
-                <Pencil className="h-4 w-4" />
-            </Button>
+            {isAuthenticated && (
+              <Button variant="outline" size="icon" onClick={onOpenHeaderEditModal} className="mt-2 sm:mt-0 sm:ml-4 self-center sm:self-auto" title="Edit Header Details">
+                  <Pencil className="h-4 w-4" />
+              </Button>
+            )}
         </div>
 
         {renderHeaderField("Nepali Name", politician.name_nepali)}
@@ -672,7 +678,6 @@ function ProfileHeader({ politician, photoUrl, onOpenHeaderEditModal }: ProfileH
           <div className="flex items-center space-x-2">
             {renderSocialLink(politician.twitter_handle, Twitter, 'Twitter', 'https://twitter.com/')}
             {renderSocialLink(politician.facebook_profile_url, Facebook, 'Facebook')}
-            {/* Add Instagram or other social links here if data exists */}
           </div>
           <div className="flex items-center space-x-2 mt-3 sm:mt-0 sm:ml-4">
             <Button variant={isFollowed ? "default" : "outline"} size="sm" onClick={handleFollow} className="group">
