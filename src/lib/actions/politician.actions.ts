@@ -349,12 +349,15 @@ export async function submitPoliticianHeaderEditAction(
   console.log("[submitPoliticianHeaderEditAction] Data for DB Update (nulls filtered):", JSON.stringify(updateDataForDb, null, 2));
   console.log("[submitPoliticianHeaderEditAction] Change Reason:", changeReason);
 
-  // Check for unusual numeric-looking values in common text fields
-  const fieldsToCheckForNumeric: (keyof PoliticianHeaderFormData)[] = ['name_nepali', 'dob_bs', 'contact_phone', 'permanent_address', 'current_address', 'twitter_handle'];
-  for (const field of fieldsToCheckForNumeric) {
-    const value = updateDataForDb[field];
-    if (value && typeof value === 'string' && /^\d+$/.test(value) && value.length < 5) { // Short numeric strings
-      console.warn(`[submitPoliticianHeaderEditAction] WARNING: Field '${field}' has a short purely numeric value: "${value}". If the DB column for this field is UUID, this could cause an error.`);
+  // Check for fields with the value "4" or short numeric strings
+  for (const key in updateDataForDb) {
+    if (Object.prototype.hasOwnProperty.call(updateDataForDb, key)) {
+      const value = updateDataForDb[key];
+      if (String(value) === "4") { // Check if the string representation is "4"
+        console.warn(`[submitPoliticianHeaderEditAction] CRITICAL WARNING: Field '${key}' has the value "${value}". If the database column for '${key}' is of type UUID, this WILL cause the "invalid input syntax for type uuid" error. Please check your 'politicians' table schema and the corresponding type in src/types/supabase.ts.`);
+      } else if (typeof value === 'string' && /^\d+$/.test(value) && value.length < 5) {
+        console.warn(`[submitPoliticianHeaderEditAction] INFO: Field '${key}' has a short purely numeric value: "${value}". If the DB column for this field is UUID and this value is not "4", this might still be an issue, but the error message specifically mentioned "4".`);
+      }
     }
   }
 

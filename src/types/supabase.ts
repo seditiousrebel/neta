@@ -1510,6 +1510,7 @@ export type Database = {
           created_at: string
           full_name: string | null
           id: string
+          is_super_admin: boolean | null
           role: string
           updated_at: string
           user_id: string
@@ -1519,6 +1520,7 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id: string
+          is_super_admin?: boolean | null
           role?: string
           updated_at?: string
           user_id: string
@@ -1528,6 +1530,7 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
+          is_super_admin?: boolean | null
           role?: string
           updated_at?: string
           user_id?: string
@@ -1731,6 +1734,10 @@ export type Database = {
       current_user_role: {
         Args: Record<PropertyKey, never>
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      get_current_user_role_from_users_table: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
     }
     Enums: {
