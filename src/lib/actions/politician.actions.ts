@@ -42,12 +42,34 @@ export async function approvePoliticianAction(
     }
 
     // 2. Create the politician entry
-    const politicianDataForInsert = { ...(edit.proposed_data as any) };
-    delete politicianDataForInsert.id;
+    // Ensure proposed_data fields are correctly formatted for 'politicians' table.
+    // Specifically, fields like criminal_records/asset_declarations should be strings
+    // if they were stored as stringified JSON in pending_edits.proposed_data.
+    const politicianDataForInsert: Record<string, any> = {};
+    const rawProposedData = edit.proposed_data as Record<string, any>;
+
+    for (const key in rawProposedData) {
+        if (Object.prototype.hasOwnProperty.call(rawProposedData, key)) {
+            const value = rawProposedData[key];
+            if (key === 'criminal_records') {
+                politicianDataForInsert['public_criminal_records'] = typeof value === 'string' ? value : JSON.stringify(value ?? null);
+            } else if (key === 'asset_declarations') {
+                politicianDataForInsert['asset_declarations'] = typeof value === 'string' ? value : JSON.stringify(value ?? null);
+            } else if (key === 'education_details') {
+                politicianDataForInsert['education'] = typeof value === 'string' ? value : JSON.stringify(value ?? null);
+            } else if (key === 'biography') {
+                politicianDataForInsert['bio'] = value;
+            } else {
+                politicianDataForInsert[key] = value;
+            }
+        }
+    }
+    delete politicianDataForInsert.id; // Remove ID if present in proposed_data
+
 
     const { data: newPoliticianEntry, error: insertPoliticianError } = await supabase
       .from('politicians')
-      .insert(politicianDataForInsert)
+      .insert(politicianDataForInsert as Tables<'politicians'>['Insert'])
       .select('id')
       .single();
 
@@ -63,7 +85,7 @@ export async function approvePoliticianAction(
       .update({
         status: 'Approved',
         moderator_id: adminId,
-        entity_id: newPoliticianId,
+        entity_id: newPoliticianId, // Storing as string, DB column is string|null
         updated_at: new Date().toISOString(),
       })
       .eq('id', editId);
@@ -82,11 +104,11 @@ export async function approvePoliticianAction(
       .from('entity_revisions')
       .insert({
         entity_type: 'Politician',
-        entity_id: newPoliticianId,
-        data: edit.proposed_data,
+        entity_id: parseInt(newPoliticianId, 10), // entity_revisions.entity_id is number
+        data: edit.proposed_data, // Store the original proposed_data from pending_edits
         submitter_id: edit.proposer_id,
         approver_id: adminId,
-        edit_id: edit.id, // Link back to the original pending_edit
+        edit_id: edit.id, 
       });
 
     if (revisionError) {
@@ -118,44 +140,48 @@ export interface DirectUpdateReturnType {
   message?: string;
 }
 
-// Fields that store structured data as stringified JSON in the 'politicians' table's TEXT columns
 const JSON_STRING_FIELDS_IN_POLITICIANS_TABLE: Array<keyof Tables<'politicians'>['Row']> = [
   'public_criminal_records',
   'asset_declarations',
-  // 'education' and 'political_journey' are also TEXT but currently edited as strings (Markdown)
+  'education',
+  'political_journey',
 ];
 
 
 export async function updatePoliticianDirectly(
-  politicianId: string,
-  fieldName: keyof Tables<'politicians'>['Row'], // Use keyof for type safety
+  politicianId: string, // This is string from URL param, but politicians.id is number
+  fieldName: keyof Tables<'politicians'>['Row'], 
   newValue: any,
   adminId: string,
   changeReason?: string
 ): Promise<DirectUpdateReturnType> {
   const supabase = createSupabaseServerClient();
+  const numericPoliticianId = parseInt(politicianId, 10);
+  if (isNaN(numericPoliticianId)) {
+    return { success: false, error: "Invalid Politician ID format." };
+  }
 
   try {
-    let valueToStore = newValue;
-    // If the field is one that expects stringified JSON and newValue is an object/array, stringify it.
+    let valueToStoreInPoliticiansTable = newValue;
     if (
       JSON_STRING_FIELDS_IN_POLITICIANS_TABLE.includes(fieldName) &&
       typeof newValue === 'object' &&
       newValue !== null
     ) {
-      valueToStore = JSON.stringify(newValue);
+      valueToStoreInPoliticiansTable = JSON.stringify(newValue);
+    } else if (newValue === undefined) {
+      valueToStoreInPoliticiansTable = null;
     }
 
-
     const updateObject = {
-      [fieldName]: valueToStore,
+      [fieldName]: valueToStoreInPoliticiansTable,
       updated_at: new Date().toISOString(),
     };
 
     const { data: updatedPolitician, error: updateError } = await supabase
       .from('politicians')
       .update(updateObject)
-      .eq('id', politicianId)
+      .eq('id', numericPoliticianId) // Use numeric ID for comparison
       .select()
       .single();
 
@@ -177,18 +203,18 @@ export async function updatePoliticianDirectly(
       };
     }
 
-    // For entity_revisions.data (which is JSON type), store the original newValue
-    // as it can handle objects/arrays directly.
-    const revisionDataValue = { [fieldName]: newValue };
+    // For entity_revisions.data (JSONB), store the original newValue (or null if undefined)
+    const revisionDataValueForField = newValue === undefined ? null : newValue;
+    const revisionDataPayload = { [fieldName]: revisionDataValueForField };
 
     const revisionData = {
-      entity_type: 'Politician',
-      entity_id: politicianId,
-      data: revisionDataValue,
+      entity_type: 'Politician' as const,
+      entity_id: numericPoliticianId, // Use numeric ID
+      data: revisionDataPayload, // Store the original structure for JSONB
       submitter_id: adminId,
       approver_id: adminId,
       approved_at: new Date().toISOString(),
-      edit_id: null, // Direct admin edit, not tied to a pending_edit
+      edit_id: null, 
       change_reason: changeReason || "Admin direct update.",
     };
 
@@ -201,7 +227,7 @@ export async function updatePoliticianDirectly(
     }
 
     revalidatePath(`/politicians`);
-    revalidatePath(`/politicians/${politicianId}`);
+    revalidatePath(`/politicians/${politicianId}`); // Path is string based on URL
 
     return {
       success: true,
@@ -224,13 +250,13 @@ export interface SubmitEditReturnType {
   success: boolean;
   message?: string;
   error?: string;
-  editId?: number | string;
+  editId?: number | string; // pending_edits.id is number
 }
 
 // This action is for single-field edits (typically from EditModal by non-admins)
 export async function submitPoliticianEdit(
-  politicianId: string,
-  fieldName: string, // Keep as string for flexibility, can be any field name
+  politicianId: string, // From URL, string
+  fieldName: string, 
   newValue: any,
   changeReason: string,
   userId: string
@@ -238,20 +264,26 @@ export async function submitPoliticianEdit(
   const supabase = createSupabaseServerClient();
 
   try {
-    let proposedValue = newValue;
-    if (
-        (fieldName === 'public_criminal_records' || fieldName === 'asset_declarations') &&
-        typeof newValue === 'object' && newValue !== null
-    ) {
-        proposedValue = JSON.stringify(newValue);
-    }
+    let finalValueToPropose = newValue;
 
-    const proposedData = { [fieldName]: proposedValue };
+    if (newValue === undefined) {
+        finalValueToPropose = null;
+    } else if ((fieldName === 'public_criminal_records' || fieldName === 'asset_declarations' || fieldName === 'education' || fieldName === 'political_journey' || fieldName === 'bio') && 
+               (Array.isArray(newValue) || (typeof newValue === 'object' && newValue !== null))) {
+        // If field is one of these complex types that are TEXT in `politicians` table,
+        // and `newValue` is an array/object (from custom editors), stringify it.
+        // This stringified version will be stored as the value for this key in proposed_data (JSONB).
+        finalValueToPropose = JSON.stringify(newValue);
+    }
+    // For other simple fields (text, number, boolean from standard inputs), 
+    // finalValueToPropose remains as newValue (or null if it was undefined).
+
+    const proposedDataWrapper = { [fieldName]: finalValueToPropose };
 
     const pendingEditData = {
-      entity_type: 'Politician',
-      entity_id: politicianId,
-      proposed_data: proposedData,
+      entity_type: 'Politician' as const,
+      entity_id: politicianId, // pending_edits.entity_id is string | null in schema types
+      proposed_data: proposedDataWrapper, 
       change_reason: changeReason,
       proposer_id: userId,
       status: 'Pending' as const,
@@ -260,11 +292,11 @@ export async function submitPoliticianEdit(
     const { data, error } = await supabase
       .from('pending_edits')
       .insert(pendingEditData)
-      .select()
+      .select('id') // pending_edits.id is number
       .single();
 
     if (error) {
-      console.error('Error inserting single field pending edit:', error);
+      console.error('Error inserting single field pending edit:', error.message, error.details, error.hint);
       return {
         success: false,
         error: error.message,
@@ -282,7 +314,6 @@ export async function submitPoliticianEdit(
     }
 
     revalidatePath(`/politicians/${politicianId}`);
-
 
     return {
       success: true,
@@ -315,13 +346,19 @@ export interface PoliticianHeaderFormData {
 }
 
 export async function submitPoliticianHeaderEditAction(
-  politicianId: string,
+  politicianId: string, // From URL, string
   formData: PoliticianHeaderFormData,
   userId: string,
   isAdmin: boolean,
   changeReasonInput?: string
 ): Promise<SubmitEditReturnType | DirectUpdateReturnType> {
   const supabase = createSupabaseServerClient();
+  const numericPoliticianId = parseInt(politicianId, 10); // For DB operations on politicians.id
+
+  if (isNaN(numericPoliticianId) && isAdmin) { // Non-admin path uses string politicianId for pending_edits
+    return { success: false, error: "Invalid Politician ID for admin update." };
+  }
+
 
   const changeReason = changeReasonInput || (isAdmin ? "Admin header update" : "User header update proposal");
 
@@ -329,51 +366,32 @@ export async function submitPoliticianHeaderEditAction(
     return { success: false, error: "Change reason is required for non-admin users.", message: "Change reason is required." };
   }
 
-  const processedFormData: { [key: string]: any } = {};
+  const dataForStorage: Record<string, any> = {};
   for (const key in formData) {
     if (Object.prototype.hasOwnProperty.call(formData, key)) {
       const typedKey = key as keyof PoliticianHeaderFormData;
-      processedFormData[typedKey] = formData[typedKey] === '' ? null : formData[typedKey];
+      const value = formData[typedKey];
+      dataForStorage[typedKey] = value === '' || value === undefined ? null : value;
     }
   }
-  const updateDataForDb = Object.fromEntries(
-    Object.entries(processedFormData).filter(([_, v]) => v !== null)
-  );
-
-  // Enhanced Logging for Debugging UUID issue
-  console.log("[submitPoliticianHeaderEditAction] Admin:", isAdmin);
-  console.log("[submitPoliticianHeaderEditAction] Politician ID:", politicianId);
-  console.log("[submitPoliticianHeaderEditAction] User ID (for submitter/approver):", userId);
-  console.log("[submitPoliticianHeaderEditAction] Raw FormData:", JSON.stringify(formData, null, 2));
-  console.log("[submitPoliticianHeaderEditAction] Processed FormData (empty strings to null):", JSON.stringify(processedFormData, null, 2));
-  console.log("[submitPoliticianHeaderEditAction] Data for DB Update (nulls filtered):", JSON.stringify(updateDataForDb, null, 2));
-  console.log("[submitPoliticianHeaderEditAction] Change Reason:", changeReason);
-
-  // Check for fields with the value "4" or short numeric strings
-  for (const key in updateDataForDb) {
-    if (Object.prototype.hasOwnProperty.call(updateDataForDb, key)) {
-      const value = updateDataForDb[key];
-      if (String(value) === "4") { // Check if the string representation is "4"
-        console.warn(`[submitPoliticianHeaderEditAction] CRITICAL WARNING: Field '${key}' has the value "${value}". If the database column for '${key}' is of type UUID, this WILL cause the "invalid input syntax for type uuid" error. Please check your 'politicians' table schema and the corresponding type in src/types/supabase.ts.`);
-      } else if (typeof value === 'string' && /^\d+$/.test(value) && value.length < 5) {
-        console.warn(`[submitPoliticianHeaderEditAction] INFO: Field '${key}' has a short purely numeric value: "${value}". If the DB column for this field is UUID and this value is not "4", this might still be an issue, but the error message specifically mentioned "4".`);
-      }
-    }
-  }
-
-
+  
   if (isAdmin) {
-    const updateObject: Partial<Tables<'politicians'>['Row']> = {
-      ...updateDataForDb,
+    const updateObjectForPoliticiansTable: Partial<Tables<'politicians'>['Row']> = {
+      ...dataForStorage, // Already has nulls for empty/undefined
       updated_at: new Date().toISOString(),
     };
+     // Remove keys that are not direct columns or if the value is null and DB default is better
+    const finalUpdateObject = Object.fromEntries(
+        Object.entries(updateObjectForPoliticiansTable).filter(([_, v]) => v !== undefined) // Keep nulls
+    );
 
-    console.log("[submitPoliticianHeaderEditAction] Admin attempting direct update. Update object for 'politicians' table:", JSON.stringify(updateObject, null, 2));
+
+    console.log("[submitPoliticianHeaderEditAction] Admin attempting direct update. Update object for 'politicians' table:", JSON.stringify(finalUpdateObject, null, 2));
 
     const { data: updatedPolitician, error: updateError } = await supabase
       .from('politicians')
-      .update(updateObject)
-      .eq('id', politicianId)
+      .update(finalUpdateObject)
+      .eq('id', numericPoliticianId)
       .select()
       .single();
 
@@ -389,8 +407,8 @@ export async function submitPoliticianHeaderEditAction(
       .from('entity_revisions')
       .insert({
         entity_type: 'Politician',
-        entity_id: politicianId,
-        data: processedFormData,
+        entity_id: numericPoliticianId,
+        data: dataForStorage, // Store the processed form data (with nulls)
         submitter_id: userId,
         approver_id: userId,
         approved_at: new Date().toISOString(),
@@ -398,15 +416,16 @@ export async function submitPoliticianHeaderEditAction(
       });
     if (revisionError) console.warn("[submitPoliticianHeaderEditAction] Revision creation error for header update (admin):", revisionError.message);
 
-    revalidatePath(`/politicians/${politicianId}`);
+    revalidatePath(`/politicians/${politicianId}`); // URL path uses string ID
     revalidatePath(`/politicians`);
     return { success: true, data: updatedPolitician, message: 'Politician header updated successfully.' };
 
   } else {
+    // For non-admin, store in pending_edits
     const pendingEditData = {
-      entity_type: 'Politician',
-      entity_id: politicianId,
-      proposed_data: processedFormData,
+      entity_type: 'Politician' as const,
+      entity_id: politicianId, // pending_edits.entity_id is string | null
+      proposed_data: dataForStorage, // Store processed form data (with nulls)
       change_reason: changeReason,
       proposer_id: userId,
       status: 'Pending' as const,
@@ -417,7 +436,7 @@ export async function submitPoliticianHeaderEditAction(
     const { data, error } = await supabase
       .from('pending_edits')
       .insert(pendingEditData)
-      .select('id')
+      .select('id') // pending_edits.id is number
       .single();
 
     if (error) {
@@ -433,27 +452,52 @@ export async function submitPoliticianHeaderEditAction(
 }
 
 
-// This action is for submitting a full profile update for an existing politician (from /politicians/[id]/edit page)
 export async function submitFullPoliticianUpdate(
-  politicianId: string,
+  politicianId: string, // From URL, string
   formData: PoliticianFormData,
   userId: string
 ): Promise<SubmitEditReturnType> {
   const supabase = createSupabaseServerClient();
 
   try {
-    const proposedDataForPendingEdit: any = { ...formData };
-    if (Array.isArray(formData.criminal_records)) {
-        proposedDataForPendingEdit.criminal_records = JSON.stringify(formData.criminal_records);
+    const dataForProposedEdit: Record<string, any> = {};
+    for (const key in formData) {
+        if (Object.prototype.hasOwnProperty.call(formData, key)) {
+            const typedKey = key as keyof PoliticianFormData;
+            const value = formData[typedKey];
+
+            if (value === undefined) {
+                dataForProposedEdit[typedKey] = null; 
+            } else if ((typedKey === 'criminal_records' || typedKey === 'asset_declarations' || typedKey === 'education_details' || typedKey === 'political_journey') &&
+                       (Array.isArray(value) || (typeof value === 'object' && value !== null))) {
+                // These fields, if complex types, are stringified for proposed_data,
+                // because target columns in 'politicians' are TEXT (public_criminal_records, asset_declarations, education, political_journey)
+                // Note: education_details from form maps to education in DB, biography to bio.
+                const dbKey = typedKey === 'education_details' ? 'education' : (typedKey === 'biography' ? 'bio' : typedKey);
+                dataForProposedEdit[dbKey] = JSON.stringify(value);
+            } else if (typedKey === 'biography') {
+                dataForProposedEdit['bio'] = value; // Map biography to bio
+            }
+            else {
+                dataForProposedEdit[typedKey] = value;
+            }
+        }
     }
-    if (Array.isArray(formData.asset_declarations)) {
-        proposedDataForPendingEdit.asset_declarations = JSON.stringify(formData.asset_declarations);
+    // Ensure actual DB column names if they differ from PoliticianFormData keys beyond the specific mappings above
+    if (dataForProposedEdit.hasOwnProperty('education_details') && !dataForProposedEdit.hasOwnProperty('education')) {
+        dataForProposedEdit.education = dataForProposedEdit.education_details;
+        delete dataForProposedEdit.education_details;
+    }
+     if (dataForProposedEdit.hasOwnProperty('biography') && !dataForProposedEdit.hasOwnProperty('bio')) {
+        dataForProposedEdit.bio = dataForProposedEdit.biography;
+        delete dataForProposedEdit.biography;
     }
 
+
     const pendingEditData = {
-      entity_type: 'Politician',
-      entity_id: politicianId,
-      proposed_data: proposedDataForPendingEdit,
+      entity_type: 'Politician' as const,
+      entity_id: politicianId, // pending_edits.entity_id is string | null
+      proposed_data: dataForProposedEdit,
       change_reason: "User submitted full profile update via edit page.",
       proposer_id: userId,
       status: 'Pending' as const,
@@ -462,11 +506,11 @@ export async function submitFullPoliticianUpdate(
     const { data, error } = await supabase
       .from('pending_edits')
       .insert(pendingEditData)
-      .select('id')
+      .select('id') // pending_edits.id is number
       .single();
 
     if (error) {
-      console.error('Error inserting full profile pending edit:', error);
+      console.error('Error inserting full profile pending edit:', error.message, error.details, error.hint);
       return {
         success: false,
         error: error.message,
@@ -504,7 +548,7 @@ export async function submitFullPoliticianUpdate(
 
 
 export async function denyPoliticianAction(
-  editId: number,
+  editId: number, // pending_edits.id is number
   adminId: string,
   reason?: string
 ): Promise<{ success: boolean; message: string; error?: string }> {
@@ -552,4 +596,6 @@ export async function denyPoliticianAction(
     return { success: false, message: `An unexpected error occurred: ${e.message}`, error: e.toString() };
   }
 }
+    
+
     
