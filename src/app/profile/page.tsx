@@ -28,20 +28,19 @@ export default async function ProfilePage() {
   }
 
   // Fetch detailed user profile from public.users
-  // Now including avatar_url and bio in the select
   const { data: userProfileData, error: profileError } = await supabase
     .from('users')
     .select(`
       id,
       full_name,
       email,
-      role,
+      user_role, -- Fetch user_role
       contribution_points,
       avatar_url,
       bio
     `)
     .eq('id', authUser.id)
-    .maybeSingle<Tables<'users'>['Row']>(); // Using full Tables<'users'>['Row'] type
+    .maybeSingle<Pick<Tables<'users'>['Row'], 'id' | 'full_name' | 'email' | 'user_role' | 'contribution_points' | 'avatar_url' | 'bio'>>();
 
   let currentUser: User;
 
@@ -56,7 +55,7 @@ export default async function ProfilePage() {
       email: userProfileData.email,
       avatarUrl: userProfileData.avatar_url || authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${getInitials(userProfileData.full_name)}`,
       bio: userProfileData.bio || (authUser.user_metadata?.bio as string) || null,
-      role: userProfileData.role,
+      role: userProfileData.user_role || 'User', // Use user_role here
       contributionPoints: userProfileData.contribution_points,
     };
   } else {
@@ -68,14 +67,14 @@ export default async function ProfilePage() {
       email: authUser.email,
       avatarUrl: authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${getInitials(authUser.user_metadata?.full_name || authUser.email)}`,
       bio: (authUser.user_metadata?.bio as string) || null,
-      role: 'User', // Default role if profile is missing
+      role: (authUser.user_metadata?.user_role as string) || 'User', // Fallback to metadata user_role or default
       contributionPoints: 0, // Default points
     };
   }
-  
+
   const { data: badgesData, error: badgesError } = await supabase
     .from('user_badges')
-    .select(`
+    .select(\`
       awarded_at,
       badges (
         id,
@@ -83,14 +82,14 @@ export default async function ProfilePage() {
         description,
         icon_asset_id
       )
-    `)
+    \`)
     .eq('user_id', authUser.id);
 
   if (badgesError) {
     console.error("[ProfilePage Server Component] Error fetching user badges:", badgesError.message);
   }
   const userBadges: UserBadge[] = badgesData?.map(ub => ({
-    id: ub.badges!.id, 
+    id: ub.badges!.id,
     name: ub.badges!.name,
     description: ub.badges!.description,
     icon_asset_id: ub.badges!.icon_asset_id,
@@ -103,7 +102,7 @@ export default async function ProfilePage() {
     .select('id, entity_type, proposed_data, status, created_at, change_reason')
     .eq('proposer_id', authUser.id)
     .order('created_at', { ascending: false })
-    .limit(10); 
+    .limit(10);
 
    if (contributionsError) {
     console.error("[ProfilePage Server Component] Error fetching user contributions:", contributionsError.message);
@@ -134,7 +133,7 @@ export default async function ProfilePage() {
           </div>
         </div>
       </div>
-      
+
       {currentUser.bio && (
         <Card>
           <CardHeader><CardTitle>About Me</CardTitle></CardHeader>
@@ -163,7 +162,7 @@ export default async function ProfilePage() {
                 <p className="text-sm text-muted-foreground">Contribution Points</p>
             </div>
             <div>
-                <p className="text-3xl font-bold">{userBadges.length}</p> 
+                <p className="text-3xl font-bold">{userBadges.length}</p>
                 <p className="text-sm text-muted-foreground">Badges Earned</p>
             </div>
         </CardContent>

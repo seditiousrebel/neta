@@ -20,7 +20,7 @@ export async function middleware(request: NextRequest) {
   // First, update the session for all requests.
   const response = await updateSession(request);
 
-  const supabase = createSupabaseServerClient(); 
+  const supabase = createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   const isAuthenticated = !!user;
   const { pathname } = request.nextUrl;
@@ -32,7 +32,7 @@ export async function middleware(request: NextRequest) {
     }
     return response; // Allow access to auth pages like login, register
   }
-  
+
   // Allow access to explicitly public pages
   if (isPublicPage(pathname)) {
     return response;
@@ -50,17 +50,17 @@ export async function middleware(request: NextRequest) {
   if (isAuthenticated && isAdminPage(pathname)) {
     const { data: userProfile, error: profileError } = await supabase
       .from('users')
-      .select('role')
+      .select('user_role') // Check user_role
       .eq('id', user.id)
-      .single<Pick<Database['public']['Tables']['users']['Row'], 'role'>>();
+      .single<Pick<Database['public']['Tables']['users']['Row'], 'user_role'>>();
 
-    if (profileError || !userProfile || userProfile.role !== 'Admin') {
+    if (profileError || !userProfile || userProfile.user_role !== 'Admin') { // Check user_role here
       // Not an admin or profile error, redirect to home or an unauthorized page
-      console.warn(`User ${user.id} attempted to access admin route ${pathname} without Admin role.`);
+      console.warn(`User ${user.id} attempted to access admin route ${pathname} without Admin role. Current role: ${userProfile?.user_role}`);
       return NextResponse.redirect(new URL('/', request.url)); // Or a specific /unauthorized page
     }
   }
-  
+
   // For all other cases (e.g., authenticated user accessing general protected or public pages)
   return response;
 }

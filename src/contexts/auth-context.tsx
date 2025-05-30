@@ -31,9 +31,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Select all columns, but be aware if some don't exist (like avatar_url or bio)
     const { data, error } = await supabase
       .from('users')
-      .select('*') 
+      .select('id, full_name, email, user_role, contribution_points, avatar_url, bio') // Specifically select user_role
       .eq('id', userId)
-      .maybeSingle(); 
+      .maybeSingle();
     if (error) {
       console.error('Error fetching user profile:', error.message);
       return null;
@@ -51,11 +51,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         id: authUser.id,
         email: authUser.email,
         name: userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
-        // Prefer avatar_url from auth metadata, then placeholder
-        avatarUrl: authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${(userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email || 'U').charAt(0).toUpperCase()}`,
-        // Prefer bio from auth metadata, then null
-        bio: (authUser.user_metadata?.bio as string) || userProfile?.bio || null,
-        role: userProfile?.role || 'User', 
+        avatarUrl: userProfile?.avatar_url || authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${(userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email || 'U').charAt(0).toUpperCase()}`,
+        bio: userProfile?.bio || (authUser.user_metadata?.bio as string) || null,
+        role: userProfile?.user_role || 'User', // Use user_role here
         contributionPoints: userProfile?.contribution_points || 0,
       };
       setUser(appUser);
@@ -66,7 +64,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     setIsLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase]); 
+  }, [supabase]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -106,11 +104,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      isAuthenticated, 
-      isLoading, 
-      logout, 
+    <AuthContext.Provider value={{
+      user,
+      isAuthenticated,
+      isLoading,
+      logout,
       supabase,
     }}>
       {children}
