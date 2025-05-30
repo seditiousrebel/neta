@@ -111,6 +111,73 @@ export async function approvePoliticianAction(
   }
 }
 
+// Define ReturnType for submitPoliticianEdit
+export interface SubmitEditReturnType {
+  success: boolean;
+  data?: any; // Consider using a more specific type if the structure of the inserted record is known
+  error?: any; // Consider using a specific error type
+  message?: string;
+}
+
+export async function submitPoliticianEdit(
+  politicianId: string, // Assuming politicianId from profile page is string (UUID)
+  fieldName: string,
+  newValue: any,
+  changeReason: string,
+  userId: string // ID of the user proposing the edit
+): Promise<SubmitEditReturnType> {
+  const supabase = createSupabaseServerClient();
+
+  try {
+    const proposedData = { [fieldName]: newValue };
+
+    // Construct the record for pending_edits
+    const pendingEditData = {
+      entity_type: 'Politician',
+      entity_id: politicianId, // This should match the type of politicians.id
+      proposed_data: proposedData,
+      change_reason: changeReason,
+      proposer_id: userId,
+      status: 'Pending' as const, // Ensure this matches enum if defined in DB
+      // created_at and updated_at are typically handled by DB defaults (e.g., now())
+      // If not, you can set them:
+      // created_at: new Date().toISOString(),
+      // updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from('pending_edits')
+      .insert(pendingEditData)
+      .select() // Optionally select the inserted record
+      .single(); // Assuming you want to return the inserted record
+
+    if (error) {
+      console.error('Error inserting pending edit:', error);
+      return { 
+        success: false, 
+        error: { message: error.message, details: error.details, hint: error.hint, code: error.code },
+        message: 'Failed to submit edit proposal.' 
+      };
+    }
+
+    // Revalidate relevant paths if needed, e.g., a user's dashboard of pending edits
+    // revalidatePath(`/user/${userId}/pending-edits`); 
+    // Or revalidate the politician's page if you display pending edits there (less common)
+    // revalidatePath(`/politicians/${politicianId}`);
+
+
+    return { success: true, data, message: 'Edit proposal submitted successfully.' };
+
+  } catch (e: any) {
+    console.error('Unexpected error in submitPoliticianEdit:', e);
+    return { 
+      success: false, 
+      error: { message: e.message || 'An unexpected error occurred.' },
+      message: 'An unexpected error occurred while submitting the edit proposal.'
+    };
+  }
+}
+
 export async function denyPoliticianAction(
   editId: number, 
   adminId: string, 
