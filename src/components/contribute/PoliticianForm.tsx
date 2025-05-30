@@ -1,5 +1,5 @@
 // src/components/contribute/PoliticianForm.tsx
-"use client"; 
+"use client";
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useForm, useWatch, Controller } from 'react-hook-form';
@@ -17,39 +17,36 @@ import { Loader2 } from 'lucide-react';
 const LOCAL_STORAGE_KEY_NEW_POLITICIAN = 'newPoliticianFormDraft_v1';
 
 // Zod Schema for validation
-// Making sure the PoliticianFormData is comprehensive for a new submission
 const politicianFormSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   name_nepali: z.string().optional(),
-  dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Date must be YYYY-MM-DD" }).optional().or(z.literal('')), // Optional but specific format if provided
+  dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Date must be YYYY-MM-DD" }).optional().or(z.literal('')),
   gender: z.enum(['Male', 'Female', 'Other', 'PreferNotToSay']).optional(),
   photo_asset_id: z.string().uuid({message: "Invalid photo asset ID format."}).optional().nullable(),
-  
-  // Detailed text fields, suggest JSON or structured text
-  biography: z.string().optional(),
-  education_details: z.string().optional(), // Could be JSON string: array of {degree, institution, year}
-  political_journey: z.string().optional(), // Could be JSON string: array of {position, party, startDate, endDate}
-  criminal_records: z.string().optional(), // Could be JSON string or "None"
-  asset_declarations: z.string().optional(), // Could be JSON string: array of {year, description, value}
 
-  // Contact and Social are nested objects
+  biography: z.string().optional(),
+  education_details: z.string().optional(),
+  political_journey: z.string().optional(),
+  criminal_records: z.string().optional(),
+  asset_declarations: z.string().optional(),
+
   contact_information: z.object({
     email: z.string().email({ message: "Invalid email address." }).optional().or(z.literal('')),
     phone: z.string().optional(),
     address: z.string().optional(),
-  }).optional().default({}), // Default to empty object
-  
+  }).optional().default({}),
+
   social_media_handles: z.object({
     twitter: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
     facebook: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
     instagram: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
-  }).optional().default({}), // Default to empty object
+  }).optional().default({}),
 });
 
 export type PoliticianFormData = z.infer<typeof politicianFormSchema>;
 
 interface PoliticianFormProps {
-  onSubmit: (data: PoliticianFormData) => void; // Changed from Promise<void> as submit happens in parent
+  onSubmit: (data: PoliticianFormData) => void;
   isLoading?: boolean;
   defaultValues?: Partial<PoliticianFormData>;
 }
@@ -72,11 +69,10 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
       asset_declarations: '',
       contact_information: { email: '', phone: '', address: '' },
       social_media_handles: { twitter: '', facebook: '', instagram: '' },
-      ...defaultValues, // Apply passed defaults over these
+      ...defaultValues,
     },
   });
 
-  // Load draft from localStorage
   useEffect(() => {
     const savedDraft = localStorage.getItem(LOCAL_STORAGE_KEY_NEW_POLITICIAN);
     if (savedDraft) {
@@ -104,7 +100,7 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
   const saveDraft = useCallback(debounce((data: PoliticianFormData) => {
     localStorage.setItem(LOCAL_STORAGE_KEY_NEW_POLITICIAN, JSON.stringify(data));
     setDraftSaveStatus(`Draft autosaved at ${new Date().toLocaleTimeString()}`);
-  }, 1500), []); // Empty dependency array for useCallback
+  }, 1500), []);
 
   useEffect(() => {
     if (form.formState.isDirty) {
@@ -117,13 +113,12 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
   };
 
   const handleFormSubmitWrapper = (data: PoliticianFormData) => {
-    onSubmit(data); // This now passes data to parent for preview
-    // Draft clearing will happen in parent after successful final submission
+    onSubmit(data);
   };
-  
+
   const clearDraftManually = () => {
     localStorage.removeItem(LOCAL_STORAGE_KEY_NEW_POLITICIAN);
-    form.reset({ // Reset to initial empty/default state
+    form.reset({
       name: '', name_nepali: '', dob: '', gender: undefined, photo_asset_id: null,
       biography: '', education_details: '', political_journey: '', criminal_records: '', asset_declarations: '',
       contact_information: { email: '', phone: '', address: '' },
@@ -189,27 +184,28 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
         </div>
 
         <h2 className="text-xl font-semibold border-b pb-2 mt-6">Photo</h2>
-        <FormField control={form.control} name="photo_asset_id" render={({ field }) => ( 
+        <FormField control={form.control} name="photo_asset_id" render={({ field }) => (
             <FormItem>
               <FormLabel>Politician's Photo</FormLabel>
               <FormControl>
-                <PhotoUpload 
-                  onUploadComplete={handlePhotoUploaded} 
+                <PhotoUpload
+                  onUploadComplete={handlePhotoUploaded}
                   assetType="politician_photo"
-                  aspectRatio={1} 
+                  aspectRatio={1}
                 />
               </FormControl>
               {field.value && <FormDescription className="mt-2">Photo uploaded. Asset ID: {field.value}</FormDescription>}
               <FormMessage />
             </FormItem>
           )}
-        
+        />
+
         <h2 className="text-xl font-semibold border-b pb-2 mt-6">Biography</h2>
         <FormField control={form.control} name="biography" render={({ field }) => (
             <FormItem>
               <FormLabel>Detailed Biography</FormLabel>
-              <FormControl><Textarea placeholder="Enter detailed biography..." {...field} rows={5} /></FormControl>
-              <FormDescription>Share key information about the politician's background and career. Use Markdown for formatting.</FormDescription>
+              <FormControl><Textarea placeholder="Share key events, background, and career highlights using Markdown for formatting." {...field} rows={5} /></FormControl>
+              <FormDescription>Use Markdown for formatting (e.g., **bold**, *italics*, lists). Share key information about the politician's background and career.</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -220,7 +216,7 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
           <FormField control={form.control} name="education_details" render={({ field }) => (
               <FormItem>
                 <FormLabel>Education Details</FormLabel>
-                <FormControl><Textarea placeholder="Example:\n- Masters in Political Science, XYZ University (2010)\n- Bachelor of Arts, ABC College (2007)" {...field} rows={3} /></FormControl>
+                <FormControl><Textarea placeholder="Example using Markdown:\n- **Masters in Political Science** - XYZ University (2010)\n- *Bachelor of Arts* - ABC College (2007)" {...field} rows={3} /></FormControl>
                 <FormDescription>Use Markdown for formatting. List degrees, institutions, and years.</FormDescription>
                 <FormMessage />
               </FormItem>
@@ -229,8 +225,8 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
           <FormField control={form.control} name="political_journey" render={({ field }) => (
               <FormItem>
                 <FormLabel>Political Journey</FormLabel>
-                <FormControl><Textarea placeholder="Example:\n- Ward Member, ABC Party (2060-01-01 - 2064-12-30)\n  - Focused on local infrastructure projects." {...field} rows={4} /></FormControl>
-                <FormDescription>Use Markdown for formatting. Detail roles, parties, and timelines.</FormDescription>
+                <FormControl><Textarea placeholder="Example using Markdown:\n- **Ward Member**, ABC Party (2060-01-01 - 2064-12-30)\n  - Focused on local infrastructure projects.\n- *Central Committee Member*, XYZ Party (2070-Present)" {...field} rows={4} /></FormControl>
+                <FormDescription>Use Markdown for formatting. Detail roles, parties, timelines, and key responsibilities or achievements.</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -238,8 +234,8 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
           <FormField control={form.control} name="criminal_records" render={({ field }) => (
               <FormItem>
                 <FormLabel>Criminal Records (if any)</FormLabel>
-                <FormControl><Textarea placeholder='Example:\n- Case: Alleged Irregularity (2070)\n  Status: Pending Investigation\nOr simply type "None".' {...field} rows={3} /></FormControl>
-                <FormDescription>Use Markdown for formatting. Describe any cases and their status, or state "None".</FormDescription>
+                <FormControl><Textarea placeholder='Example using Markdown:\n**Case: Alleged Irregularity (2070)**\n- Status: Pending Investigation\n- Details: Accusations related to...\n\nOr simply type: `None`' {...field} rows={3} /></FormControl>
+                <FormDescription>Use Markdown for formatting. Describe any cases, their status, and relevant dates or outcomes. If none, state "None".</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -247,8 +243,8 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
           <FormField control={form.control} name="asset_declarations" render={({ field }) => (
               <FormItem>
                 <FormLabel>Asset Declarations</FormLabel>
-                <FormControl><Textarea placeholder="Example:\n**Year 2078**\n- House in KTM, Value: 1 Crore NRs\n- Land in Pokhara, Value: 50 Lakhs NRs" {...field} rows={4} /></FormControl>
-                <FormDescription>Use Markdown for formatting. List assets, their value, and relevant years.</FormDescription>
+                <FormControl><Textarea placeholder="Example using Markdown:\n**Year 2078**\n- House in KTM, Value: Approx. 1 Crore NRs\n- Land in Pokhara, Value: Approx. 50 Lakhs NRs\n\n**Year 2077**\n- Bank Balance: Approx. 20 Lakhs NRs" {...field} rows={4} /></FormControl>
+                <FormDescription>Use Markdown for formatting. List assets, their approximate value, and relevant years. Provide as much detail as publicly available and verifiable.</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -313,7 +309,7 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
             )}
           />
         </div>
-        
+
         <Button type="submit" disabled={isLoading || !form.formState.isDirty || !!Object.keys(form.formState.errors).length} className="mt-8 w-full md:w-auto">
           {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           {isLoading ? 'Processing...' : 'Preview Contribution'}
