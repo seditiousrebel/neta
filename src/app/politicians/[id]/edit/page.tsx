@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { getPoliticianById } from '@/lib/supabase/politicians';
 import { submitFullPoliticianUpdate } from '@/lib/actions/politician.actions';
-import { useRouter, notFound, useSearchParams } from 'next/navigation'; // Added useSearchParams
+import { useRouter, notFound, useSearchParams } from 'next/navigation'; 
 
 
 interface EditPoliticianPageProps {
@@ -22,9 +22,9 @@ interface EditPoliticianPageProps {
 const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsProp }) => {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams(); // For getting 'next' query param
+  const searchParams = useSearchParams(); 
 
-  const resolvedParams = use(paramsProp); 
+  const resolvedParams = use(paramsProp);
   const politicianId = resolvedParams.id;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -60,7 +60,7 @@ const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsP
   };
 
   const handleEditPreview = () => {
-    setPreviewData(null); 
+    setPreviewData(null);
   };
 
   const handleConfirmSubmit = async () => {
@@ -80,10 +80,10 @@ const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsP
         console.error("Submission error or invalid response:", result.error, result.editId);
         throw new Error(result.error || "Submission failed or no valid Edit ID returned.");
       }
-      
+
       const editId = String(result.editId);
       setSuccessInfo({ editId, message: `Edit submitted successfully! Your Edit ID is ${editId}. It will be reviewed by an admin.` });
-      setPreviewData(null); 
+      setPreviewData(null);
     } catch (err: any) {
       console.error("Submission error:", err);
       const errorMessage = err.message || "An unexpected error occurred.";
@@ -92,7 +92,7 @@ const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsP
       setIsSubmitting(false);
     }
   };
-  
+
   if (authLoading || isLoadingInitialData) {
     return (
       <div className="container mx-auto p-4 py-12 text-center flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
@@ -105,7 +105,7 @@ const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsP
   }
 
   if (!user) {
-    const nextPath = `/politicians/${politicianId}/edit`;
+    const nextPath = typeof window !== 'undefined' ? window.location.pathname : `/politicians/${politicianId}/edit`;
     const loginUrl = `/auth/login?next=${encodeURIComponent(nextPath)}`;
     return (
       <div className="container mx-auto p-4 py-12 max-w-xl">
@@ -149,7 +149,7 @@ const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsP
           <AlertTitle>Error Submitting Edit</AlertTitle>
           <AlertDescription>
             {error}
-            {previewData && ( 
+            {previewData && (
               <Button onClick={handleConfirmSubmit} disabled={isSubmitting} variant="outline" size="sm" className="mt-3">
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {isSubmitting ? 'Retrying...' : 'Retry Submission'}
@@ -174,15 +174,15 @@ const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsP
         </Alert>
       )}
 
-      {!previewData && !successInfo && initialData && ( 
+      {!previewData && !successInfo && initialData && (
         <Card className="shadow-lg border-primary/20">
           <CardHeader>
             <CardTitle className="text-2xl">Politician Details</CardTitle>
             <CardDescription>Please update the information as accurately as possible. All edits are reviewed.</CardDescription>
           </CardHeader>
           <CardContent>
-            <PoliticianForm 
-              onSubmit={handleFormSubmitToPreview} 
+            <PoliticianForm
+              onSubmit={handleFormSubmitToPreview}
               isLoading={isSubmitting}
               mode="edit"
               politicianId={politicianId}
@@ -218,7 +218,7 @@ const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsP
               } else {
                 displayValue = String(value);
               }
-              
+
               const originalValue = initialData ? (initialData as any)[key] : undefined;
               const isChanged = JSON.stringify(value) !== JSON.stringify(originalValue);
 

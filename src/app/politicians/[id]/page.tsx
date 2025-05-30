@@ -7,17 +7,17 @@ import { getPublicUrlForMediaAsset } from '@/lib/uploadUtils';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter, notFound } from 'next/navigation';
+import { useRouter, notFound, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import {
   User, Cake, VenetianMask, Info, Twitter, Facebook, Instagram, Globe, Mail, Phone, MapPin,
-  Heart, Share2, AlertTriangle, Landmark, Building, Pencil, Library
+  Heart, Share2, AlertTriangle, Landmark, Building, Pencil, Library, Loader2
 } from 'lucide-react';
-import type { PoliticianFormData } from '@/components/contribute/PoliticianForm'; 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle as ModalTitle, DialogDescription as ModalDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'; // Alias DialogTitle for clarity
 import Overview from '@/components/politicians/profile/Overview';
 import CareerTimeline from '@/components/politicians/profile/CareerTimeline';
 import CriminalRecordsDisplay from '@/components/politicians/profile/CriminalRecordsDisplay';
@@ -27,10 +27,13 @@ import { RichTextEditor } from '@/components/wiki/RichTextEditor';
 import { DateEditor, DateEditorProps } from '@/components/wiki/DateEditor';
 import { CriminalRecordEditor, CriminalRecordEditorProps, type CriminalRecord } from '@/components/wiki/CriminalRecordEditor';
 import { AssetDeclarationEditor, AssetDeclarationEditorProps, type AssetDeclaration } from '@/components/wiki/AssetDeclarationEditor';
-import AssetDeclarationsDisplay from '@/components/politicians/profile/AssetDeclarationsDisplay'; 
+import AssetDeclarationsDisplay from '@/components/politicians/profile/AssetDeclarationsDisplay';
 import EditHistory from '@/components/politicians/profile/EditHistory';
 import type { DetailedPolitician, PoliticianPartyMembership, PoliticianParty, PoliticianMediaAsset, ProvinceFilterOption, CareerJourneyEntry } from '@/types/entities';
-import { getProvinceFilterOptions } from '@/lib/supabase/data'; 
+import { getProvinceFilterOptions } from '@/lib/supabase/data';
+import PoliticianHeaderForm, { type PoliticianHeaderFormData } from '@/components/politicians/profile/PoliticianHeaderForm';
+import { submitPoliticianHeaderEditAction, type SubmitEditReturnType, type DirectUpdateReturnType } from '@/lib/actions/politician.actions';
+
 
 interface ModalContentData {
   fieldName: string;
@@ -40,12 +43,12 @@ interface ModalContentData {
   editorComponent?: React.ComponentType<EditorProps<any>>;
   editorProps?: Record<string, any>;
   politicianId: string;
-  fieldOptions?: Array<{ label: string; value: string }>; 
+  fieldOptions?: Array<{ label: string; value: string }>;
 }
 
 
 async function getPoliticianDetails(politicianId: string): Promise<DetailedPolitician | null> {
-  const supabase = createSupabaseBrowserClient(); 
+  const supabase = createSupabaseBrowserClient();
   if (!politicianId || isNaN(Number(politicianId))) {
     console.error('Invalid politician ID:', politicianId);
     return null;
@@ -75,7 +78,7 @@ async function getPoliticianDetails(politicianId: string): Promise<DetailedPolit
     promises!politician_id ( * ),
     provinces (id, name)
   `;
-  
+
   try {
     let { data, error } = await supabase
       .from('politicians')
@@ -89,7 +92,7 @@ async function getPoliticianDetails(politicianId: string): Promise<DetailedPolit
         console.warn("Fallback: Retrying query without 'politician_career_entries' due to relationship error.");
         const fallbackQuery = await supabase
           .from('politicians')
-          .select(baseSelect) 
+          .select(baseSelect)
           .eq('id', numericId)
           .maybeSingle<Omit<DetailedPolitician, 'politician_career_entries'>>();
 
@@ -109,9 +112,9 @@ async function getPoliticianDetails(politicianId: string): Promise<DetailedPolit
           }
           return { ...fallbackQuery.data, politician_career_entries: careerData || [] } as DetailedPolitician;
         }
-        return null; 
+        return null;
       }
-      return null; 
+      return null;
     }
     return data;
   } catch (e: any) {
@@ -121,10 +124,10 @@ async function getPoliticianDetails(politicianId: string): Promise<DetailedPolit
 }
 
 export default function PoliticianDetailPage({ params: serverParamsProp }: { params: { id: string } }) {
-  const resolvedServerParams = use(serverParamsProp); 
+  const resolvedServerParams = use(serverParamsProp);
   const id = resolvedServerParams.id;
 
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -134,9 +137,12 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
   const [provinceOptions, setProvinceOptions] = useState<Array<{ label: string; value: string }>>([]);
 
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalData, setModalData] = useState<Partial<ModalContentData>>({});
+  const [isSingleFieldModalOpen, setIsSingleFieldModalOpen] = useState(false);
+  const [singleFieldModalData, setSingleFieldModalData] = useState<Partial<ModalContentData>>({});
   const [activeTab, setActiveTab] = useState("overview");
+
+  const [isHeaderEditModalOpen, setIsHeaderEditModalOpen] = useState(false);
+  const [isSubmittingHeader, setIsSubmittingHeader] = useState(false);
 
 
   useEffect(() => {
@@ -187,8 +193,8 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
   }, [id]);
 
 
-  const openModal = (data: ModalContentData) => {
-    if (!user && data.fieldName !== 'login_prompt') { 
+  const openSingleFieldModal = (data: ModalContentData) => {
+    if (!user && data.fieldName !== 'login_prompt') {
       toast({
         title: "Authentication Required",
         description: "You need to be logged in to propose an edit.",
@@ -204,7 +210,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
       });
       return;
     }
-    
+
     if (data.fieldName === 'province_id') {
         data.fieldOptions = provinceOptions;
     }
@@ -224,18 +230,81 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
     }
 
 
-    setModalData({ ...data, currentValue: currentValueForModal, politicianId: String(politician?.id || '') });
-    setIsModalOpen(true);
+    setSingleFieldModalData({ ...data, currentValue: currentValueForModal, politicianId: String(politician?.id || '') });
+    setIsSingleFieldModalOpen(true);
   };
 
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setModalData({});
+  const closeSingleFieldModal = () => {
+    setIsSingleFieldModalOpen(false);
+    setSingleFieldModalData({});
+  };
+
+  const handleHeaderFormSubmit = async (formData: PoliticianHeaderFormData, changeReason?: string) => {
+    if (!user || !politician) {
+        toast({ title: "Error", description: "User or politician data missing.", variant: "destructive" });
+        return;
+    }
+    if (!user.role?.includes('Admin') && (!changeReason || changeReason.trim() === "")) {
+      toast({ title: "Change Reason Required", description: "Please provide a reason for your edit.", variant: "destructive" });
+      return;
+    }
+
+    setIsSubmittingHeader(true);
+    const result: SubmitEditReturnType | DirectUpdateReturnType = await submitPoliticianHeaderEditAction(
+        String(politician.id),
+        formData,
+        user.id,
+        user.role?.includes('Admin') ?? false,
+        changeReason
+    );
+    setIsSubmittingHeader(false);
+
+    if (result.success) {
+        toast({
+            title: user.role?.includes('Admin') ? "Header Updated" : "Header Edit Submitted",
+            description: result.message || (user.role?.includes('Admin') ? "Header details updated directly." : "Your header edit proposal has been submitted."),
+            variant: "success"
+        });
+        setIsHeaderEditModalOpen(false);
+        // Trigger a re-fetch of politician data to reflect changes
+        const updatedDetails = await getPoliticianDetails(id);
+        if (updatedDetails) setPolitician(updatedDetails);
+    } else {
+        toast({
+            title: "Update Failed",
+            description: result.error || "Could not update header details.",
+            variant: "destructive"
+        });
+    }
+  };
+
+  const getInitialHeaderData = (): PoliticianHeaderFormData | undefined => {
+    if (!politician) return undefined;
+    return {
+        name: politician.name || '',
+        name_nepali: politician.name_nepali || '',
+        dob: politician.dob || '',
+        dob_bs: politician.dob_bs || '',
+        gender: politician.gender || '',
+        contact_email: politician.contact_email || '',
+        contact_phone: politician.contact_phone || '',
+        permanent_address: politician.permanent_address || '',
+        current_address: politician.current_address || '',
+        twitter_handle: politician.twitter_handle || '',
+        facebook_profile_url: politician.facebook_profile_url || '',
+    };
   };
 
 
-  if (isLoading || !politician) {
-    return <div className="container mx-auto p-4 py-8 text-center">Loading politician profile...</div>;
+  if (isLoading || authLoading || !politician) {
+    return (
+        <div className="container mx-auto p-4 py-8 text-center flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">
+            {authLoading ? "Authenticating..." : "Loading politician profile..."}
+            </p>
+        </div>
+    );
   }
 
   return (
@@ -244,8 +313,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
       <ProfileHeader
         politician={politician}
         photoUrl={photoUrl}
-        onOpenModal={openModal}
-        provinceOptions={provinceOptions} 
+        onOpenHeaderEditModal={() => setIsHeaderEditModalOpen(true)}
       />
 
         <div className="mt-10">
@@ -270,8 +338,8 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                     politician={politician}
                     currentPositionData={politician.politician_positions?.find(p => p.is_current)}
                     currentPartyData={politician.party_memberships?.find(pm => pm.is_active)}
-                    onOpenModal={openModal} 
-                    politicianId={String(politician.id)} 
+                    onOpenModal={openSingleFieldModal}
+                    politicianId={String(politician.id)}
                   />
                 </CardContent>
               </Card>
@@ -282,11 +350,11 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>Career Timeline</CardTitle>
                    <EditButton
-                        onClick={() => openModal({
-                            fieldName: 'political_journey', 
+                        onClick={() => openSingleFieldModal({
+                            fieldName: 'political_journey',
                             fieldLabel: 'Political Journey / Career Entries',
-                            currentValue: politician.political_journey || '', 
-                            fieldType: 'textarea', 
+                            currentValue: politician.political_journey || '',
+                            fieldType: 'textarea',
                             editorProps: { placeholder: 'Enter political journey using Markdown for structure.', rows: 10},
                             politicianId: String(politician.id),
                         })}
@@ -307,10 +375,10 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                     <CardDescription>Information related to any reported criminal records.</CardDescription>
                   </div>
                    <EditButton
-                       onClick={() => openModal({
+                       onClick={() => openSingleFieldModal({
                             fieldName: 'public_criminal_records',
                             fieldLabel: 'Criminal Records',
-                            currentValue: politician.public_criminal_records, 
+                            currentValue: politician.public_criminal_records,
                             fieldType: 'custom',
                             editorComponent: CriminalRecordEditor,
                             editorProps: { /* if any specific props are needed */ },
@@ -333,10 +401,10 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                         <CardDescription>Yearly declarations of assets.</CardDescription>
                     </div>
                     <EditButton
-                       onClick={() => openModal({
+                       onClick={() => openSingleFieldModal({
                             fieldName: 'asset_declarations',
                             fieldLabel: 'Asset Declarations',
-                            currentValue: politician.asset_declarations, 
+                            currentValue: politician.asset_declarations,
                             fieldType: 'custom',
                             editorComponent: AssetDeclarationEditor,
                             editorProps: { /* if any specific props are needed */ },
@@ -365,19 +433,44 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
           </Tabs>
         </div>
       </div>
+
+      {/* Single Field Edit Modal */}
       <EditModal
-        isOpen={isModalOpen}
-        onClose={closeModal}
+        isOpen={isSingleFieldModalOpen}
+        onClose={closeSingleFieldModal}
         politicianId={politician?.id ? String(politician.id) : ''}
-        fieldName={modalData.fieldName || ''}
-        fieldLabel={modalData.fieldLabel || ''}
-        currentValue={modalData.currentValue}
-        fieldType={modalData.fieldType as ModalFieldType}
-        editorComponent={modalData.editorComponent}
-        editorProps={modalData.editorProps}
-        fieldOptions={modalData.fieldOptions} 
-        isAdmin={user?.role === 'Admin'}
+        fieldName={singleFieldModalData.fieldName || ''}
+        fieldLabel={singleFieldModalData.fieldLabel || ''}
+        currentValue={singleFieldModalData.currentValue}
+        fieldType={singleFieldModalData.fieldType as ModalFieldType}
+        editorComponent={singleFieldModalData.editorComponent}
+        editorProps={singleFieldModalData.editorProps}
+        fieldOptions={singleFieldModalData.fieldOptions}
+        isAdmin={user?.role?.includes('Admin')}
       />
+
+      {/* Header Edit Modal */}
+      {isHeaderEditModalOpen && politician && (
+        <Dialog open={isHeaderEditModalOpen} onOpenChange={setIsHeaderEditModalOpen}>
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
+                <DialogHeader>
+                    <ModalTitle>Edit Politician Header</ModalTitle>
+                    <ModalDescription>
+                        Update the main details for {politician.name}. 
+                        {!user?.role?.includes('Admin') && " All changes will be submitted for review."}
+                    </ModalDescription>
+                </DialogHeader>
+                <div className="flex-grow overflow-y-auto pr-2 py-4">
+                    <PoliticianHeaderForm
+                        initialData={getInitialHeaderData()}
+                        onSubmit={handleHeaderFormSubmit}
+                        isLoading={isSubmittingHeader}
+                        isAdmin={user?.role?.includes('Admin') ?? false}
+                    />
+                </div>
+            </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }
@@ -385,11 +478,10 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
 interface ProfileHeaderProps {
   politician: DetailedPolitician;
   photoUrl: string | null;
-  onOpenModal: (data: ModalContentData) => void;
-  provinceOptions: Array<{label: string; value: string}>;
+  onOpenHeaderEditModal: () => void; // Changed from onOpenModal to be specific
 }
 
-function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: ProfileHeaderProps) {
+function ProfileHeader({ politician, photoUrl, onOpenHeaderEditModal }: ProfileHeaderProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isFollowed, setIsFollowed] = useState(false);
@@ -462,7 +554,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
     icon?: React.ReactNode
   ) => {
     if (value === undefined || value === null || String(value).trim() === '') {
-        return ( // Still render the field label even if value is not set, but indicate it
+        return (
           <div className="flex items-start text-sm text-gray-700 dark:text-gray-300 mb-1.5">
             {icon && React.cloneElement(icon as React.ReactElement, { className: "h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" })}
             <span className="font-semibold min-w-[100px] sm:min-w-[120px]">{label}:</span>
@@ -472,7 +564,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
           </div>
         );
     }
-    const displayValue = String(value ?? ''); 
+    const displayValue = String(value ?? '');
 
     return (
       <div className="flex items-start text-sm text-gray-700 dark:text-gray-300 mb-1.5">
@@ -484,15 +576,15 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
       </div>
     );
   };
-  
+
   const renderSocialLink = (
     value?: string | null,
     IconComponent?: React.ElementType,
     platformName?: string,
     urlPrefix?: string
   ) => {
-    if (!value && !IconComponent) return null; 
-    
+    if (!value && !IconComponent) return null;
+
     let href = value || '#';
     if (urlPrefix && value) {
         href = `${urlPrefix}${value.replace('@', '')}`;
@@ -507,7 +599,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
                 <IconComponent className="h-5 w-5" />
             </a>
         )}
-        {IconComponent && !value && ( 
+        {IconComponent && !value && (
             <span className="text-muted-foreground p-1"><IconComponent className="h-5 w-5 opacity-50" /></span>
         )}
       </div>
@@ -541,10 +633,8 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
             <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-1 sm:mb-0">
                 {politician.name}
             </h1>
-             <Button variant="outline" size="icon" asChild className="mt-2 sm:mt-0 sm:ml-4 self-center sm:self-auto" title="Edit Profile Details">
-              <Link href={`/politicians/${politician.id}/edit`}>
-                <Pencil className="h-4 w-4" /> 
-              </Link>
+             <Button variant="outline" size="icon" onClick={onOpenHeaderEditModal} className="mt-2 sm:mt-0 sm:ml-4 self-center sm:self-auto" title="Edit Header Details">
+                <Pencil className="h-4 w-4" />
             </Button>
         </div>
 
@@ -553,7 +643,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
         {renderHeaderField("Date of Birth (AD)", politician.dob ? new Date(politician.dob).toLocaleDateString() : null, <Cake />)}
         {renderHeaderField("Date of Birth (BS)", politician.dob_bs, <Cake />)}
         {renderHeaderField("Gender", politician.gender, <VenetianMask />)}
-        
+
         {activePartyMembership && activePartyMembership.parties && (
           <div className="relative group/field mt-3 mb-3 p-3 bg-muted/30 dark:bg-muted/10 rounded-lg inline-flex items-center gap-2">
               {partyLogoUrl ? (
@@ -603,3 +693,4 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
     
 
     
+
