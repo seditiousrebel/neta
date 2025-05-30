@@ -27,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 
 // Props that custom editors will receive
-export interface EditorProps<T = string | number | any[] | Record<string, any>> { // Allow complex types for custom editors
+export interface EditorProps<T = string | number | any[] | Record<string, any>> {
   value: T;
   onChange: (value: T) => void;
   disabled?: boolean;
@@ -35,7 +35,7 @@ export interface EditorProps<T = string | number | any[] | Record<string, any>> 
   className?: string;
   id?: string;
   maxLength?: number;
-  options?: string[]; // For select type
+  options?: Array<{ label: string; value: string } | string> | undefined; // Updated type
   // Allow any other props for custom editors
   [key: string]: any;
 }
@@ -47,10 +47,10 @@ export interface EditModalProps {
   onClose: () => void;
   politicianId: string;
   fieldName: string;
-  currentValue: any; // Allow any type for currentValue
+  currentValue: any;
   fieldType?: FieldType;
   fieldLabel?: string;
-  fieldOptions?: string[];
+  fieldOptions?: Array<{ label: string; value: string } | string> | undefined; // Updated type
   editorComponent?: React.ComponentType<EditorProps<any>>;
   editorProps?: Record<string, any>;
   isAdmin?: boolean;
@@ -79,9 +79,9 @@ export function EditModal({
     setNewValue(currentValue);
     setChangeReason('');
     setIsSubmitting(false);
-  }, [currentValue, isOpen, fieldName]); // Added fieldName to dependencies
+  }, [currentValue, isOpen, fieldName]);
 
-  const handleValueChange = (value: any) => { // Allow any type for value
+  const handleValueChange = (value: any) => {
     setNewValue(value);
   };
 
@@ -95,7 +95,6 @@ export function EditModal({
       return;
     }
 
-    // For array/object values, compare with JSON.stringify to detect actual change
     const isComplexType = typeof currentValue === 'object' && currentValue !== null;
     const valueChanged = isComplexType
       ? JSON.stringify(newValue) !== JSON.stringify(currentValue)
@@ -139,7 +138,7 @@ export function EditModal({
         description: result.message || (isAdmin ? `Field "${fieldName}" updated directly.` : "Your edit proposal has been submitted for review."),
         variant: "success"
       });
-      onClose(); // Close modal on success
+      onClose();
     } else {
       toast({
         title: isAdmin ? "Admin Edit Failed" : "Submission Failed",
@@ -171,7 +170,7 @@ export function EditModal({
     id: `edit-${fieldName}`,
     placeholder: `Enter ${displayLabel.toLowerCase()}...`,
     options: fieldOptions,
-    ...(editorProps || {}), // Spread additional editor-specific props
+    ...(editorProps || {}),
   };
 
   const renderEditor = () => {
@@ -213,16 +212,22 @@ export function EditModal({
         return (
           <Select
             onValueChange={(val) => handleValueChange(val)}
-            defaultValue={String(newValue ?? '')}
+            defaultValue={String(newValue ?? '')} // DefaultValue needs to be a string
             disabled={editorCommonProps.disabled}
           >
             <SelectTrigger id={editorCommonProps.id} className={cn("w-full", editorCommonProps.className)}>
               <SelectValue placeholder={editorCommonProps.placeholder || `Select ${displayLabel}`} />
             </SelectTrigger>
             <SelectContent>
-              {editorCommonProps.options?.map(opt => (
-                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-              ))}
+              {editorCommonProps.options?.map((opt, index) => {
+                if (typeof opt === 'object' && opt !== null && 'value' in opt && 'label' in opt) {
+                  // Ensure opt.value is a string for SelectItem value prop
+                  return <SelectItem key={String(opt.value) + '-' + index} value={String(opt.value)}>{opt.label}</SelectItem>;
+                } else if (typeof opt === 'string') {
+                  return <SelectItem key={opt + '-' + index} value={opt}>{opt}</SelectItem>;
+                }
+                return null; // Should not happen with well-formed options
+              })}
             </SelectContent>
           </Select>
         );
@@ -303,5 +308,4 @@ export function EditModal({
     </Dialog>
   );
 }
-
     
