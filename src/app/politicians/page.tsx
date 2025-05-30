@@ -131,9 +131,14 @@ export default function PoliticiansPageClient({}: PoliticiansPageProps) {
   };
 
   const handleConfirmSubmit = async () => {
-    if (!formDataForPreview || !user) {
+    if (!formDataForPreview) {
       setSubmissionStatus('error');
-      setSubmissionMessage("No data to submit or user not found.");
+      setSubmissionMessage("Error: Form data is missing. Please try filling the form again.");
+      return;
+    }
+    if (!user || !user.id) {
+      setSubmissionStatus('error');
+      setSubmissionMessage("Error: User authentication data is missing. Please log in again.");
       return;
     }
 
@@ -142,18 +147,24 @@ export default function PoliticiansPageClient({}: PoliticiansPageProps) {
 
     try {
       const result = await submitNewPoliticianContribution(formDataForPreview, user.id);
-      if (result.error || !result.data || result.data.length === 0 || !result.data[0].id) {
-        throw new Error(result.error?.message || "Submission failed or no valid ID returned.");
+
+      if (result.error) {
+        setSubmissionStatus('error');
+        setSubmissionMessage(result.error.message);
+      } else if (!result.data || result.data.length === 0 || !result.data[0].id) {
+        setSubmissionStatus('error');
+        setSubmissionMessage("Submission seemed to succeed but failed to retrieve a confirmation ID. Please check with an administrator.");
+      } else {
+        const editId = String(result.data[0].id);
+        setSubmissionStatus('success');
+        setSubmissionMessage(`Contribution submitted successfully! Your Edit ID is ${editId}. It will be reviewed by an admin.`);
+        setIsPreviewing(false);
+        // TODO: Consider revalidating or refetching the politicians list here if using TanStack Query
+        // router.refresh(); // Or use TanStack Query's invalidateQueries
       }
-      const editId = String(result.data[0].id);
-      setSubmissionStatus('success');
-      setSubmissionMessage(`Contribution submitted successfully! Your Edit ID is ${editId}. It will be reviewed by an admin.`);
-      setIsPreviewing(false); 
-      // TODO: Consider revalidating or refetching the politicians list here if using TanStack Query
-      // router.refresh(); // Or use TanStack Query's invalidateQueries
     } catch (err: any) {
       setSubmissionStatus('error');
-      setSubmissionMessage(err.message || "An unexpected error occurred.");
+      setSubmissionMessage(err.message || "An unexpected error occurred. Please try again.");
     }
   };
   
@@ -307,7 +318,7 @@ export default function PoliticiansPageClient({}: PoliticiansPageProps) {
                 <Button variant="outline" onClick={handleEditPreview} disabled={submissionStatus === 'submitting'}>Back to Edit</Button>
                 <Button onClick={handleConfirmSubmit} disabled={submissionStatus === 'submitting'}>
                   {submissionStatus === 'submitting' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Confirm & Submit
+                  Submit New Politician
                 </Button>
               </>
             ) : (
