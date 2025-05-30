@@ -69,7 +69,13 @@ export async function getPendingEdits(options: { page?: number } = {}): Promise<
   return { edits: data as AdminPendingEdit[], count };
 }
 
-export async function approveEdit(editId: number): Promise<{ success: boolean, error?: string, message?: string }> {
+export async function approveEdit(editId: number): Promise<{ 
+  success: boolean, 
+  error?: string, 
+  message?: string,
+  entityType?: string, // Added
+  entityId?: number | string | null // Added
+}> {
   const supabase = createSupabaseServerClient();
   
   // 1. Fetch the pending_edit by editId.
@@ -96,13 +102,14 @@ export async function approveEdit(editId: number): Promise<{ success: boolean, e
 
   // 2. Determine the target table based on entity_type.
   switch (edit.entity_type) {
-    case 'Politician': // Ensure this matches your ENUM or string value in the DB
+    case 'Politician': 
       targetTable = 'politicians';
       break;
-    case 'Party': // Ensure this matches your ENUM or string value in the DB
+    case 'Party': 
       targetTable = 'parties';
       break;
     // Add more cases for other entity types you support
+    // e.g., case 'Promise': targetTable = 'promises'; break;
     default:
       console.error(`Unsupported entity_type for approval: ${edit.entity_type}`);
       return { success: false, error: `Entity type '${edit.entity_type}' is not supported for approval.` };
@@ -110,8 +117,6 @@ export async function approveEdit(editId: number): Promise<{ success: boolean, e
 
   try {
     // 3. Apply the 'proposed_data' to the target table's entity_id record.
-    // Ensure proposed_data is a valid partial object for the target table.
-    // The 'id' column should NOT be in proposed_data for an update.
     const updateData = edit.proposed_data as Omit<Tables<typeof targetTable>['Update'], 'id'>;
     
     const { error: updateError } = await supabase
@@ -137,14 +142,15 @@ export async function approveEdit(editId: number): Promise<{ success: boolean, e
 
     if (statusError) {
       console.error(`Error updating status for edit ${editId}:`, statusError.message);
-      // Potentially roll back or log this inconsistency
       return { success: false, error: `Entity updated, but failed to update edit status: ${statusError.message}` };
     }
     
-    // 5. Potentially award contribution points to the proposer (can be a separate function/step).
-    // For now, we'll skip this for brevity.
-
-    return { success: true, message: `${edit.entity_type} with ID ${edit.entity_id} approved successfully.` };
+    return { 
+      success: true, 
+      message: `${edit.entity_type} with ID ${edit.entity_id} approved successfully.`,
+      entityType: edit.entity_type, // Return entityType
+      entityId: edit.entity_id      // Return entityId
+    };
 
   } catch (e: any) {
     console.error(`Unexpected error during approval process for edit ${editId}:`, e.message);

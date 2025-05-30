@@ -2,7 +2,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { denyEdit, approveEdit } from "@/lib/supabase/admin"; // Import approveEdit
+import { denyEdit, approveEdit } from "@/lib/supabase/admin"; 
 import { createSupabaseServerClient } from "../supabase/server";
 
 export async function denyPendingEditAction(editId: number) {
@@ -13,7 +13,6 @@ export async function denyPendingEditAction(editId: number) {
     return { success: false, error: "User not authenticated." };
   }
   
-  // For now, a generic denial reason. This can be expanded to take a reason from the UI.
   const denialReason = "Denied by admin."; 
 
   const result = await denyEdit(editId, denialReason);
@@ -33,19 +32,44 @@ export async function approvePendingEditAction(editId: number) {
   if (!user) {
     return { success: false, error: "User not authenticated." };
   }
-  // Potentially add role check here if needed, though AdminGuard on layout should cover it.
 
   const result = await approveEdit(editId);
   
   if (result.success) {
     revalidatePath("/admin/moderation");
-    // TODO: Consider revalidating specific entity paths if possible.
-    // Example: If a politician was edited, revalidatePaths like `/politicians` and `/politicians/${entityId}`
-    // This requires getting entityId and type from `result` or fetching the edit again.
+
+    if (result.entityType && result.entityId) {
+      let specificPath = "";
+      let listPath = "";
+
+      switch (result.entityType) {
+        case 'Politician':
+          specificPath = `/politicians/${result.entityId}`;
+          listPath = '/politicians';
+          break;
+        case 'Party':
+          specificPath = `/parties/${result.entityId}`;
+          listPath = '/parties';
+          break;
+        // Add more cases for other entity types as needed
+        // e.g., case 'Promise': specificPath = `/promises/${result.entityId}`; listPath = '/promises'; break;
+      }
+
+      if (specificPath) {
+        revalidatePath(specificPath);
+        console.log(`Revalidated path: ${specificPath}`);
+      }
+      if (listPath) {
+        revalidatePath(listPath);
+        console.log(`Revalidated path: ${listPath}`);
+      }
+      // Optionally revalidate home page or general feed if applicable
+      revalidatePath("/"); 
+    }
+    
     return { success: true, message: result.message || "Edit approved successfully." };
   } else {
     return { success: false, error: result.error || "Failed to approve edit." };
   }
 }
-
     
