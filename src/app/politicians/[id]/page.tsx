@@ -42,6 +42,7 @@ interface ModalContentData {
   politicianId: string; 
 }
 
+// PoliticianProfilePage - Main Component
 export default function PoliticianDetailPage({ params: serverParamsProp }: { params: { id: string } }) {
   const resolvedServerParams = use(serverParamsProp); 
   const id = resolvedServerParams.id; 
@@ -167,6 +168,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
           const url = await getPublicUrlForMediaAsset(String(details.media_assets.storage_path));
           setPhotoUrl(url);
         } else if ((details as any).photo_asset_id) { 
+          // Fallback if photo_asset_id is directly on politician and media_assets relation is null
           const url = await getPublicUrlForMediaAsset(String((details as any).photo_asset_id));
           setPhotoUrl(url);
         } else {
@@ -250,7 +252,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                 <CardContent className="pt-6">
                   <Overview
                     biography={politician.bio}
-                    politicalJourney={politician.political_journey as any}
+                    politicalJourney={politician.political_journey}
                     currentPositionData={politician.politician_positions?.find(p => p.is_current)}
                     currentPartyData={politician.party_memberships?.find(pm => pm.is_active)}
                   />
@@ -261,7 +263,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                             fieldLabel: 'Political Journey',
                             currentValue: politician.political_journey || [], 
                             fieldType: 'custom', 
-                            editorComponent: () => <p>Political Journey JSON/Array Editor (to be implemented)</p>,
+                            editorComponent: () => <p>Political Journey JSON/Array Editor (to be implemented)</p>, // Placeholder
                             politicianId: String(politician.id),
                         })}
                         className="static opacity-100"
@@ -281,7 +283,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                             fieldLabel: 'Career Entries',
                             currentValue: politician.politician_career_entries || [],
                             fieldType: 'custom', 
-                            editorComponent: () => <p>Career Entries Editor (to be implemented)</p>,
+                            editorComponent: () => <p>Career Entries Editor (to be implemented)</p>, // Placeholder
                             politicianId: String(politician.id),
                         })}
                         className="static opacity-100"
@@ -307,6 +309,9 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                             currentValue: politician.public_criminal_records || [], 
                             fieldType: 'custom',
                             editorComponent: CriminalRecordEditor, 
+                            editorProps: {
+                              // You can pass additional props specific to CriminalRecordEditor if needed
+                            },
                             politicianId: String(politician.id),
                         })}
                        className="static opacity-100"
@@ -332,6 +337,9 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                             currentValue: politician.asset_declarations || [], 
                             fieldType: 'custom',
                             editorComponent: AssetDeclarationEditor, 
+                            editorProps: {
+                                // Additional props for AssetDeclarationEditor if needed
+                            },
                             politicianId: String(politician.id),
                         })}
                        className="static opacity-100"
@@ -383,9 +391,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
   const { user } = useAuth();
   const { toast } = useToast();
   const [isFollowed, setIsFollowed] = useState(false); 
-  const supabase = createSupabaseBrowserClient(); // For fetching party logo URL client-side
-                                        // For ProfileHeader, we directly use the politician prop.
-
+  const supabase = createSupabaseBrowserClient(); 
   const [partyLogoUrl, setPartyLogoUrl] = useState<string | null>(null);
   const activePartyMembership = politician.party_memberships?.find(pm => pm.is_active);
 
@@ -438,26 +444,16 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
     label: string,
     value?: string | number | null,
     icon?: React.ReactNode,
-    isLink: boolean = false,
-    fieldName?: keyof DetailedPolitician | string, // Field name for editing, no fieldName means no edit button
-    fieldType: ModalFieldType = 'text',
-    editorProps: Record<string, any> = {}
+    isLink: boolean = false
   ) => {
     if (value === undefined || value === null || String(value).trim() === '') {
-      if (!fieldName) return null; // Only return null if not editable and empty
+      return null;
     }
 
-    const displayValue = (value === undefined || value === null || String(value).trim() === '')
-      ? <span className="italic text-muted-foreground">Not set</span>
-      : String(value);
+    const displayValue = String(value);
     
-    let actualCurrentValue: any = value;
-    if (politician && typeof fieldName === 'string') {
-      actualCurrentValue = (politician as any)[fieldName];
-    }
-
     return (
-      <div className="relative group flex items-start text-sm text-gray-700 dark:text-gray-300 mb-1.5">
+      <div className="flex items-start text-sm text-gray-700 dark:text-gray-300 mb-1.5">
         {icon && React.cloneElement(icon as React.ReactElement, { className: "h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" })}
         <span className="font-semibold min-w-[100px] sm:min-w-[120px]">{label}:</span>
         <div className="ml-2 break-words flex-grow">
@@ -469,19 +465,6 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
             <span>{displayValue}</span>
           )}
         </div>
-        {/* EditButton is only rendered if fieldName is provided */}
-        {fieldName && (
-          <EditButton
-            onClick={() => onOpenModal({
-              fieldName: String(fieldName),
-              fieldLabel: label,
-              currentValue: actualCurrentValue ?? '',
-              fieldType,
-              editorProps,
-              politicianId: String(politician.id),
-            })}
-          />
-        )}
       </div>
     );
   };
@@ -536,6 +519,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
             className="object-cover"
             priority
             onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-person.png'; }}
+            data-ai-hint="politician photo"
           />
         ) : (
           <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center rounded-full">
@@ -544,19 +528,16 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
         )}
       </div>
       <div className="text-center md:text-left pt-2 flex-grow">
-        {/* Removed EditButton from name here */}
         <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight">{politician.name}</h1>
         {politician.name_nepali && (
-            // Removed EditButton from nepali name here
             <p className="text-xl text-muted-foreground dark:text-gray-400 mt-1">{politician.name_nepali}</p>
         )}
 
-        {/* Current Party Affiliation */}
         {activePartyMembership && activePartyMembership.parties && (
           <div className="relative group/party-field mt-3 mb-3 p-3 bg-muted/30 rounded-md inline-block">
             <div className="flex items-center gap-2">
               {partyLogoUrl ? (
-                <Image src={partyLogoUrl} alt={`${activePartyMembership.parties.name} logo`} width={24} height={24} className="rounded-sm" />
+                <Image src={partyLogoUrl} alt={`${activePartyMembership.parties.name} logo`} width={24} height={24} className="rounded-sm" data-ai-hint="party logo small"/>
               ) : (
                 <Landmark className="h-6 w-6 text-muted-foreground" />
               )}
@@ -583,7 +564,6 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
 
 
         <div className="mt-4 space-y-1.5">
-          {/* Fields rendered without individual edit buttons by not passing fieldName */}
           {renderHeaderField("Date of Birth (AD)", politician.dob ? new Date(politician.dob).toLocaleDateString() : null, <Cake />)}
           {renderHeaderField("Date of Birth (BS)", politician.dob_bs, <Cake />)}
           {renderHeaderField("Gender", politician.gender, <VenetianMask />)}
@@ -607,8 +587,17 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
               <Share2 className="h-4 w-4 mr-2 text-muted-foreground" />
               Share
             </Button>
-            {/* Placeholder for a general "Edit Basic Info" button */}
-            <Button variant="outline" size="sm" onClick={() => toast({title: "Edit Basic Info (Placeholder)", description: "Modal/page for editing multiple fields to be implemented."})}>
+            <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => onOpenModal({
+                    fieldName: 'name', // Start by editing the name, can be expanded
+                    fieldLabel: 'Name (English)',
+                    currentValue: politician.name || '',
+                    fieldType: 'text',
+                    politicianId: String(politician.id),
+                })}
+            >
                 <Pencil className="h-4 w-4 mr-2 text-muted-foreground" />
                 Edit Info
             </Button>
@@ -620,3 +609,4 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
 }
 
     
+
