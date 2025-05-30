@@ -36,15 +36,22 @@ export async function isAdminUser(): Promise<boolean> {
   return userProfile?.role === 'Admin'; // Check role here
 }
 
-const ITEMS_PER_PAGE_ADMIN = 15;
+const ITEMS_PER_PAGE_ADMIN = 15; // Make sure this is defined or imported if used elsewhere
 
-export async function getPendingEdits(options: { page?: number } = {}): Promise<{ edits: AdminPendingEdit[]; count: number | null }> {
+export async function getPendingEdits(
+  options: { 
+    page?: number; 
+    entityType?: string; // Added entityType option
+  } = {}
+): Promise<{ edits: AdminPendingEdit[]; count: number | null }> {
   const supabase = createSupabaseServerClient();
   const page = options.page || 1;
+  const entityType = options.entityType; // Get entityType from options
+
   const from = (page - 1) * ITEMS_PER_PAGE_ADMIN;
   const to = from + ITEMS_PER_PAGE_ADMIN - 1;
 
-  const { data, error, count } = await supabase
+  let query = supabase
     .from('pending_edits')
     .select(\`
       id,
@@ -57,15 +64,25 @@ export async function getPendingEdits(options: { page?: number } = {}): Promise<
       status,
       admin_feedback,
       users (id, email, full_name)
-    \`)
+    \`, { count: 'exact' }) // Added { count: 'exact' } for Supabase v2+ count
     .eq('status', 'Pending')
     .order('created_at', { ascending: false })
     .range(from, to);
 
+  // Conditionally add entity_type filter
+  if (entityType) {
+    query = query.eq('entity_type', entityType);
+  }
+
+  const { data, error, count } = await query;
+
   if (error) {
     console.error("Error fetching pending edits:", error.message, error.details);
+    // Consider throwing the error or handling it as per project's error strategy
     return { edits: [], count: 0 };
   }
+  
+  // Ensure data is cast to AdminPendingEdit[] if necessary, Supabase client might infer it
   return { edits: data as AdminPendingEdit[], count };
 }
 
