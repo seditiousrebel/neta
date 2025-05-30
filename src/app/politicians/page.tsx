@@ -1,3 +1,4 @@
+
 // src/app/politicians/page.tsx
 import React, { Suspense } from 'react';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -116,7 +117,7 @@ async function fetchInitialPoliticians(
       // Fetch aggregate vote score from entity_votes for this politician
       const { data: votesData, error: votesError } = await supabase
         .from('entity_votes')
-        .select('vote_type', { count: 'exact' }) // count not directly used here, sum is needed
+        .select('vote_type') // Removed { count: 'exact' }
         .eq('entity_id', p.id)
         .eq('entity_type', 'Politician'); // Filter by entity type
 

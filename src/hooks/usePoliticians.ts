@@ -1,3 +1,4 @@
+
 // src/hooks/usePoliticians.ts
 "use client";
 
@@ -100,7 +101,7 @@ const fetchPoliticians = async ({
       // Fetch aggregate vote score from entity_votes for this politician
       const { data: votesData, error: votesError } = await supabase
         .from('entity_votes')
-        .select('vote_type') // Select only vote_type for summing
+        .select('vote_type') // Removed { count: 'exact' }
         .eq('entity_id', p.id)
         .eq('entity_type', 'Politician');
 
