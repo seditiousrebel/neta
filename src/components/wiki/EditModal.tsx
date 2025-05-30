@@ -24,6 +24,8 @@ import {
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // For better select UI
+import { CriminalRecordEditor } from './CriminalRecordEditor'; // Import for type comparison
+import { AssetDeclarationEditor } from './AssetDeclarationEditor'; // Import for type comparison
 
 
 // Props that custom editors will receive
@@ -244,9 +246,21 @@ export function EditModal({
     }
   };
 
+  const isComplexListEditor =
+    fieldType === 'custom' &&
+    (CustomEditor === CriminalRecordEditor || CustomEditor === AssetDeclarationEditor);
+
+  const dialogContentClasses = cn(
+    "max-h-[90vh] flex flex-col", // Common base styles for the modal content structure
+    isComplexListEditor
+      ? "sm:max-w-xl md:max-w-2xl lg:max-w-3xl" // Wider for complex editors
+      : "sm:max-w-[525px]" // Default width for simpler editors
+  );
+
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[525px] max-h-[90vh] flex flex-col">
+      <DialogContent className={dialogContentClasses}>
         <DialogHeader>
           <DialogTitle>Edit {displayLabel}</DialogTitle>
           <DialogDescription>
