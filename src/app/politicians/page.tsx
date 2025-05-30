@@ -11,6 +11,7 @@ import { getPartyFilterOptions, getProvinceFilterOptions } from '@/lib/supabase/
 import { Skeleton } from '@/components/ui/skeleton';
 import { getPublicUrlForMediaAsset } from '@/lib/supabase/storage.server';
 import { Button } from '@/components/ui/button';
+import { PlusCircle } from 'lucide-react'; // Import icon for the button
 
 const ITEMS_PER_PAGE = 12;
 
@@ -59,14 +60,13 @@ async function fetchInitialPoliticians(
       `,
       { count: 'exact' }
     )
-    .order('name', { ascending: true }) // Order by name
+    .order('name', { ascending: true })
     .range(offset, offset + ITEMS_PER_PAGE - 1);
 
   if (searchQuery) {
     query = query.textSearch('fts_vector', searchQuery, { type: 'plain', config: 'english' });
   }
   if (partyId && partyId.trim() !== '' && partyId !== 'all') {
-    // This will effectively make the join for party_memberships an INNER join when partyId filter is applied
     query = query.filter('party_memberships.parties.id', 'eq', partyId);
   }
   if (provinceId && provinceId.trim() !== '' && provinceId !== 'all') {
@@ -105,11 +105,13 @@ async function fetchInitialPoliticians(
         photoUrl = await getPublicUrlForMediaAsset(String(p.photo_asset_id));
       }
 
+      // Find the first active party membership that also has party details
       const activePartyMembership = Array.isArray(p.party_memberships)
         ? p.party_memberships.find((pm: any) => pm.is_active && pm.parties)
         : null;
       const currentPartyName = activePartyMembership?.parties?.name || 'N/A';
       
+      // Find the first current position that also has position title details
       const currentPosition = Array.isArray(p.politician_positions)
         ? p.politician_positions.find((pp: any) => pp.is_current && pp.position_titles)
         : null;
@@ -117,7 +119,7 @@ async function fetchInitialPoliticians(
       
       const { data: votesData, error: votesError } = await supabase
         .from('entity_votes')
-        .select('vote_type')
+        .select('vote_type') // No count needed here, just the types for sum
         .eq('entity_id', p.id)
         .eq('entity_type', 'Politician');
 
@@ -177,7 +179,7 @@ export default async function PoliticiansPage({
   if (searchParams?.has_criminal_record) paramsForPagination.set('has_criminal_record', searchParams.has_criminal_record);
   if (searchParams?.view) paramsForPagination.set('view', searchParams.view);
 
-  const isInitialLoadAndEmpty = !searchParams?.q && 
+  const isInitialLoadAndNoPoliticians = !searchParams?.q && 
                                 !searchParams?.partyId && 
                                 !searchParams?.provinceId && 
                                 (!searchParams?.has_criminal_record || searchParams?.has_criminal_record === 'any') && 
@@ -190,21 +192,28 @@ export default async function PoliticiansPage({
           Politician Directory
         </h1>
         <p className="text-muted-foreground mt-3 text-base sm:text-lg max-w-2xl mx-auto">
-          Browse, search, and filter profiles of politicians.
+          Browse, search, and filter profiles of politicians. Help expand our database by contributing new profiles.
         </p>
       </header>
+
+      <div className="mb-8 flex justify-center sm:justify-end">
+        <Button asChild size="lg" className="shadow-md hover:shadow-lg transition-shadow">
+          <Link href="/contribute/politician">
+            <PlusCircle className="mr-2 h-5 w-5" />
+            Contribute New Politician
+          </Link>
+        </Button>
+      </div>
 
       <Suspense fallback={<Skeleton className="h-24 w-full rounded-lg mb-6" />}>
         <PoliticianFilters initialParties={parties} initialProvinces={provinces} />
       </Suspense>
       
-      {isInitialLoadAndEmpty ? (
+      {isInitialLoadAndNoPoliticians ? (
         <div className="text-center text-muted-foreground py-12">
           <p className="text-xl mb-2">No Politicians Found in the Database</p>
-          <p className="mb-4">It looks like there are no politicians listed yet.</p>
-          <Button asChild>
-            <Link href="/contribute/politician">Contribute the First Politician</Link>
-          </Button>
+          <p className="mb-4">It looks like there are no politicians listed yet. Be the first to add one!</p>
+          {/* The main button is now above filters. Could add a smaller one here if desired or remove this prompt's button */}
         </div>
       ) : (
         <>
