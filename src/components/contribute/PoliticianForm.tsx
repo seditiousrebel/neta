@@ -1,3 +1,4 @@
+
 // src/components/contribute/PoliticianForm.tsx
 "use client";
 
@@ -16,14 +17,14 @@ import { Loader2 } from 'lucide-react';
 import { CriminalRecordEditor, type CriminalRecord } from '@/components/wiki/CriminalRecordEditor';
 import { AssetDeclarationEditor, type AssetDeclaration } from '@/components/wiki/AssetDeclarationEditor';
 
-const LOCAL_STORAGE_KEY_NEW_POLITICIAN = 'newPoliticianFormDraft_v1';
+const LOCAL_STORAGE_KEY_NEW_POLITICIAN = 'newPoliticianFormDraft_v2'; // Incremented version due to schema change
 
 // Zod Schema for validation
 
 const criminalRecordSchema = z.object({
-  id: z.string().uuid().optional(), // ID might not be present initially
-  case_description: z.string().min(1, "Description is required."),
-  offense_date: z.string().optional(), // YYYY-MM-DD
+  id: z.string().uuid(),
+  case_description: z.string().min(1, "Case description is required."),
+  offense_date: z.string().optional().or(z.literal('')), // YYYY-MM-DD or empty
   court_name: z.string().optional(),
   case_status: z.enum(['Pending', 'Convicted', 'Acquitted', 'Discharged', '']).optional(),
   sentence_details: z.string().optional(),
@@ -31,12 +32,10 @@ const criminalRecordSchema = z.object({
 });
 
 const assetDeclarationSchema = z.object({
-  id: z.string().uuid().optional(),
+  id: z.string().uuid(),
   year: z.union([z.number(), z.string()]).pipe(z.coerce.number().int().min(1900).max(new Date().getFullYear() + 5)),
   description_of_assets: z.string().min(1, "Description is required."),
-  total_value_approx: z.union([z.number(), z.string()]).pipe(z.coerce.number().optional().nullable()),
   source_of_income: z.string().optional(),
-  remarks: z.string().optional(),
 });
 
 
@@ -44,12 +43,12 @@ const politicianFormSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   name_nepali: z.string().optional(),
   dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Date must be YYYY-MM-DD" }).optional().or(z.literal('')),
-  gender: z.enum(['Male', 'Female', 'Other', 'PreferNotToSay']).optional(),
+  gender: z.enum(['Male', 'Female', 'Other', 'PreferNotToSay', '']).optional(),
   photo_asset_id: z.string().uuid({message: "Invalid photo asset ID format."}).optional().nullable(),
 
-  biography: z.string().optional(),
-  education_details: z.string().optional(), // Keeping as string for Markdown for now, can be enhanced like others if needed
-  political_journey: z.string().optional(), // Keeping as string for Markdown for now
+  biography: z.string().optional(), // Uses Markdown
+  education_details: z.string().optional(), // Uses Markdown
+  political_journey: z.string().optional(), // Uses Markdown
 
   criminal_records: z.array(criminalRecordSchema).optional().default([]),
   asset_declarations: z.array(assetDeclarationSchema).optional().default([]),
@@ -58,13 +57,13 @@ const politicianFormSchema = z.object({
     email: z.string().email({ message: "Invalid email address." }).optional().or(z.literal('')),
     phone: z.string().optional(),
     address: z.string().optional(),
-  }).optional().default({}),
+  }).optional().default({ email: '', phone: '', address: '' }),
 
   social_media_handles: z.object({
     twitter: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
     facebook: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
     instagram: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
-  }).optional().default({}),
+  }).optional().default({ twitter: '', facebook: '', instagram: '' }),
 });
 
 export type PoliticianFormData = z.infer<typeof politicianFormSchema>;
@@ -199,9 +198,10 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
           <FormField control={form.control} name="gender" render={({ field }) => (
               <FormItem>
                 <FormLabel>Gender</FormLabel>
-                 <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value || undefined}>
+                 <Select onValueChange={field.onChange} value={field.value || ''}>
                   <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
                   <SelectContent>
+                    <SelectItem value="">(Not Specified)</SelectItem>
                     <SelectItem value="Male">Male</SelectItem>
                     <SelectItem value="Female">Female</SelectItem>
                     <SelectItem value="Other">Other</SelectItem>
@@ -275,11 +275,11 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
                         <CriminalRecordEditor
                             id="criminal-records-form-editor"
                             value={field.value || []}
-                            onChange={field.onChange}
+                            onChange={(newRecords) => field.onChange(newRecords)}
                             disabled={isLoading}
                         />
                     </FormControl>
-                    <FormDescription>Add, edit, or remove criminal records.</FormDescription>
+                    <FormDescription>Add, edit, or remove criminal records. Provide accurate and verifiable information.</FormDescription>
                     <FormMessage />
                 </FormItem>
             )}
@@ -296,7 +296,7 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
                         <AssetDeclarationEditor
                             id="asset-declarations-form-editor"
                             value={field.value || []}
-                            onChange={field.onChange}
+                            onChange={(newDeclarations) => field.onChange(newDeclarations)}
                             disabled={isLoading}
                         />
                     </FormControl>
@@ -325,7 +325,7 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
               </FormItem>
             )}
           />
-          <Controller
+          <FormField
             control={form.control}
             name="contact_information.address"
             render={({ field }) => (

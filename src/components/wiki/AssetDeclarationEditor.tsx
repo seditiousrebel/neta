@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,11 +11,9 @@ import type { EditorProps } from './EditModal';
 
 export interface AssetDeclaration {
   id: string;
-  year: number | string; // Allow string for input, parse to number
-  description_of_assets: string;
-  total_value_approx?: number | string; // Allow string for input, parse to number
-  source_of_income?: string;
-  remarks?: string;
+  year: number | string; // Serves as a title/identifier
+  description_of_assets: string; // "detailed"
+  source_of_income?: string; // "source"
 }
 
 export interface AssetDeclarationEditorProps extends EditorProps<AssetDeclaration[]> {
@@ -31,7 +30,12 @@ export function AssetDeclarationEditor({
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
 
   useEffect(() => {
-    setDeclarations(Array.isArray(value) ? value.map(d => ({ ...d, id: d.id || crypto.randomUUID() })) : []);
+    setDeclarations(Array.isArray(value) ? value.map(d => ({
+      id: d.id || crypto.randomUUID(),
+      year: d.year,
+      description_of_assets: d.description_of_assets,
+      source_of_income: d.source_of_income,
+    })) : []);
   }, [value]);
 
   const handleAddNewDeclaration = () => {
@@ -39,9 +43,7 @@ export function AssetDeclarationEditor({
       id: crypto.randomUUID(),
       year: new Date().getFullYear(), // Default to current year
       description_of_assets: '',
-      total_value_approx: '',
       source_of_income: '',
-      remarks: '',
     };
     const updatedDeclarations = [...declarations, newDeclaration];
     setDeclarations(updatedDeclarations);
@@ -60,11 +62,9 @@ export function AssetDeclarationEditor({
 
   const handleFieldChange = (recordId: string, field: keyof AssetDeclaration, fieldValue: any) => {
     let processedValue = fieldValue;
-    if ((field === 'year' || field === 'total_value_approx')) {
-        // Allow empty string for optional number fields, otherwise parse
+    if (field === 'year') {
         processedValue = fieldValue === '' ? '' : parseFloat(fieldValue);
-        if (field === 'year' && fieldValue !== '' && isNaN(processedValue)) processedValue = ''; // Prevent NaN for year if not empty
-        if (field === 'total_value_approx' && fieldValue !== '' && isNaN(processedValue)) processedValue = ''; // Prevent NaN for total_value_approx if not empty
+        if (fieldValue !== '' && isNaN(processedValue as number)) processedValue = '';
     }
 
     const updatedDeclarations = declarations.map((dec) =>
@@ -74,13 +74,11 @@ export function AssetDeclarationEditor({
   };
 
   const handleSaveDeclaration = (recordId: string) => {
-    // Ensure numeric fields are numbers or undefined if empty string
     const finalDeclarations = declarations.map(dec => {
         if (dec.id === recordId) {
             return {
                 ...dec,
-                year: dec.year === '' ? new Date().getFullYear() : Number(dec.year), // Default to current year if empty
-                total_value_approx: dec.total_value_approx === '' || dec.total_value_approx === undefined ? undefined : Number(dec.total_value_approx),
+                year: dec.year === '' ? new Date().getFullYear() : Number(dec.year),
             };
         }
         return dec;
@@ -118,32 +116,19 @@ export function AssetDeclarationEditor({
             {editingRecordId === dec.id && !disabled ? (
               // EDITING VIEW
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor={`year-${dec.id}`}>Year</Label>
-                    <Input
-                      id={`year-${dec.id}`}
-                      type="number"
-                      value={dec.year}
-                      onChange={(e) => handleFieldChange(dec.id, 'year', e.target.value)}
-                      placeholder="e.g., 2023"
-                      disabled={disabled}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor={`total_value_approx-${dec.id}`}>Approx. Total Value (Optional)</Label>
-                    <Input
-                      id={`total_value_approx-${dec.id}`}
-                      type="number"
-                      value={dec.total_value_approx || ''}
-                      onChange={(e) => handleFieldChange(dec.id, 'total_value_approx', e.target.value)}
-                      placeholder="e.g., 500000"
-                      disabled={disabled}
-                    />
-                  </div>
+                <div>
+                  <Label htmlFor={`year-${dec.id}`}>Year *</Label>
+                  <Input
+                    id={`year-${dec.id}`}
+                    type="number"
+                    value={String(dec.year)} // Input expects string
+                    onChange={(e) => handleFieldChange(dec.id, 'year', e.target.value)}
+                    placeholder="e.g., 2023"
+                    disabled={disabled}
+                  />
                 </div>
                 <div>
-                  <Label htmlFor={`description_of_assets-${dec.id}`}>Description of Assets</Label>
+                  <Label htmlFor={`description_of_assets-${dec.id}`}>Description of Assets *</Label>
                   <Textarea
                     id={`description_of_assets-${dec.id}`}
                     value={dec.description_of_assets}
@@ -164,17 +149,6 @@ export function AssetDeclarationEditor({
                     disabled={disabled}
                   />
                 </div>
-                <div>
-                  <Label htmlFor={`remarks-${dec.id}`}>Remarks (Optional)</Label>
-                  <Textarea
-                    id={`remarks-${dec.id}`}
-                    value={dec.remarks || ''}
-                    onChange={(e) => handleFieldChange(dec.id, 'remarks', e.target.value)}
-                    placeholder="Any additional remarks..."
-                    className="min-h-[80px]"
-                    disabled={disabled}
-                  />
-                </div>
                 <div className="flex justify-end space-x-2 pt-2">
                     <Button variant="outline" size="sm" onClick={() => handleCancelEdit(dec.id)} title="Cancel Edit">
                         <XCircle className="h-4 w-4 mr-1" /> Cancel
@@ -189,9 +163,7 @@ export function AssetDeclarationEditor({
               <>
                 <p><strong>Year:</strong> {dec.year}</p>
                 <p><strong>Assets Description:</strong> {dec.description_of_assets || <span className="text-muted-foreground">N/A</span>}</p>
-                <p><strong>Approx. Total Value:</strong> {dec.total_value_approx !== undefined && dec.total_value_approx !== '' ? dec.total_value_approx : <span className="text-muted-foreground">N/A</span>}</p>
                 <p><strong>Source of Income:</strong> {dec.source_of_income || <span className="text-muted-foreground">N/A</span>}</p>
-                <p><strong>Remarks:</strong> {dec.remarks || <span className="text-muted-foreground">N/A</span>}</p>
               </>
             )}
           </CardContent>
