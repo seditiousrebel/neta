@@ -123,7 +123,6 @@ const JSON_STRING_FIELDS_IN_POLITICIANS_TABLE: Array<keyof Tables<'politicians'>
   'public_criminal_records',
   'asset_declarations',
   // 'education' and 'political_journey' are also TEXT but currently edited as strings (Markdown)
-  // If their editors change to output objects/arrays, add them here.
 ];
 
 
@@ -239,31 +238,20 @@ export async function submitPoliticianEdit(
   const supabase = createSupabaseServerClient();
 
   try {
-    // For pending_edits, proposed_data is JSONB, so complex objects are fine.
-    // However, if the target field in 'politicians' table is TEXT and expects stringified JSON,
-    // the admin approval process will need to handle stringification if it's not already a string.
-    // For consistency, if we know a field needs to be string for the target TEXT column,
-    // we could stringify it here too, but it's generally better to let proposed_data be rich.
-    // The admin approval logic (`approveEdit`) will then handle the final transformation to the target table schema.
-    
     let proposedValue = newValue;
-    // If fieldName matches those that are TEXT in DB but hold JSON, and newValue is object/array
     if (
         (fieldName === 'public_criminal_records' || fieldName === 'asset_declarations') &&
         typeof newValue === 'object' && newValue !== null
     ) {
         proposedValue = JSON.stringify(newValue);
     }
-    // education_details and political_journey are typically edited as Markdown strings,
-    // so they are already strings when coming from EditModal's textarea.
-
 
     const proposedData = { [fieldName]: proposedValue };
 
     const pendingEditData = {
       entity_type: 'Politician',
       entity_id: politicianId,
-      proposed_data: proposedData, // Store the potentially stringified value
+      proposed_data: proposedData,
       change_reason: changeReason,
       proposer_id: userId,
       status: 'Pending' as const,
@@ -352,14 +340,32 @@ export async function submitPoliticianHeaderEditAction(
     Object.entries(processedFormData).filter(([_, v]) => v !== null)
   );
 
+  // Enhanced Logging for Debugging UUID issue
+  console.log("[submitPoliticianHeaderEditAction] Admin:", isAdmin);
+  console.log("[submitPoliticianHeaderEditAction] Politician ID:", politicianId);
+  console.log("[submitPoliticianHeaderEditAction] User ID (for submitter/approver):", userId);
+  console.log("[submitPoliticianHeaderEditAction] Raw FormData:", JSON.stringify(formData, null, 2));
+  console.log("[submitPoliticianHeaderEditAction] Processed FormData (empty strings to null):", JSON.stringify(processedFormData, null, 2));
+  console.log("[submitPoliticianHeaderEditAction] Data for DB Update (nulls filtered):", JSON.stringify(updateDataForDb, null, 2));
+  console.log("[submitPoliticianHeaderEditAction] Change Reason:", changeReason);
+
+  // Check for unusual numeric-looking values in common text fields
+  const fieldsToCheckForNumeric: (keyof PoliticianHeaderFormData)[] = ['name_nepali', 'dob_bs', 'contact_phone', 'permanent_address', 'current_address', 'twitter_handle'];
+  for (const field of fieldsToCheckForNumeric) {
+    const value = updateDataForDb[field];
+    if (value && typeof value === 'string' && /^\d+$/.test(value) && value.length < 5) { // Short numeric strings
+      console.warn(`[submitPoliticianHeaderEditAction] WARNING: Field '${field}' has a short purely numeric value: "${value}". If the DB column for this field is UUID, this could cause an error.`);
+    }
+  }
+
 
   if (isAdmin) {
-    // Admin directly updates the politicians table.
-    // The fields in PoliticianHeaderFormData map directly to columns in politicians table.
     const updateObject: Partial<Tables<'politicians'>['Row']> = {
       ...updateDataForDb,
       updated_at: new Date().toISOString(),
     };
+
+    console.log("[submitPoliticianHeaderEditAction] Admin attempting direct update. Update object for 'politicians' table:", JSON.stringify(updateObject, null, 2));
 
     const { data: updatedPolitician, error: updateError } = await supabase
       .from('politicians')
@@ -369,7 +375,7 @@ export async function submitPoliticianHeaderEditAction(
       .single();
 
     if (updateError) {
-      console.error("Error updating politician header (admin):", updateError.message);
+      console.error("[submitPoliticianHeaderEditAction] Error updating politician header (admin):", updateError.message, updateError.details, updateError.hint);
       return { success: false, error: updateError.message, message: 'Failed to update politician header.' };
     }
     if (!updatedPolitician) {
@@ -381,29 +387,29 @@ export async function submitPoliticianHeaderEditAction(
       .insert({
         entity_type: 'Politician',
         entity_id: politicianId,
-        data: processedFormData, 
+        data: processedFormData,
         submitter_id: userId,
-        approver_id: userId, 
+        approver_id: userId,
         approved_at: new Date().toISOString(),
         change_reason: changeReason,
       });
-    if (revisionError) console.warn("Revision creation error for header update (admin):", revisionError.message);
+    if (revisionError) console.warn("[submitPoliticianHeaderEditAction] Revision creation error for header update (admin):", revisionError.message);
 
     revalidatePath(`/politicians/${politicianId}`);
     revalidatePath(`/politicians`);
     return { success: true, data: updatedPolitician, message: 'Politician header updated successfully.' };
 
-  } else { 
-    // Regular user: create pending edit for the entire header data.
-    // proposed_data will store the object of all header fields.
+  } else {
     const pendingEditData = {
       entity_type: 'Politician',
       entity_id: politicianId,
-      proposed_data: processedFormData, // Submit all processed header fields as a single JSON object
+      proposed_data: processedFormData,
       change_reason: changeReason,
       proposer_id: userId,
       status: 'Pending' as const,
     };
+    console.log("[submitPoliticianHeaderEditAction] Non-admin submitting pending edit. Pending edit data:", JSON.stringify(pendingEditData, null, 2));
+
 
     const { data, error } = await supabase
       .from('pending_edits')
@@ -412,7 +418,7 @@ export async function submitPoliticianHeaderEditAction(
       .single();
 
     if (error) {
-      console.error("Error submitting header edit proposal (user):", error.message);
+      console.error("[submitPoliticianHeaderEditAction] Error submitting header edit proposal (user):", error.message);
       return { success: false, error: error.message, message: 'Failed to submit header edit proposal.' };
     }
     if (!data || !data.id) {
@@ -433,7 +439,6 @@ export async function submitFullPoliticianUpdate(
   const supabase = createSupabaseServerClient();
 
   try {
-    // Prepare data for pending_edits. Stringify fields that are stored as TEXT in DB but are arrays/objects in form.
     const proposedDataForPendingEdit: any = { ...formData };
     if (Array.isArray(formData.criminal_records)) {
         proposedDataForPendingEdit.criminal_records = JSON.stringify(formData.criminal_records);
@@ -441,13 +446,12 @@ export async function submitFullPoliticianUpdate(
     if (Array.isArray(formData.asset_declarations)) {
         proposedDataForPendingEdit.asset_declarations = JSON.stringify(formData.asset_declarations);
     }
-    // education_details and political_journey are already strings (Markdown) from PoliticianForm
 
     const pendingEditData = {
       entity_type: 'Politician',
-      entity_id: politicianId, 
-      proposed_data: proposedDataForPendingEdit,   
-      change_reason: "User submitted full profile update via edit page.", 
+      entity_id: politicianId,
+      proposed_data: proposedDataForPendingEdit,
+      change_reason: "User submitted full profile update via edit page.",
       proposer_id: userId,
       status: 'Pending' as const,
     };
@@ -476,7 +480,7 @@ export async function submitFullPoliticianUpdate(
         }
     }
 
-    revalidatePath(`/politicians/${politicianId}`); 
+    revalidatePath(`/politicians/${politicianId}`);
 
     return {
       success: true,
