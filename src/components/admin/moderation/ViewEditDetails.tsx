@@ -16,12 +16,19 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { UserCircle, Edit, CheckCircle, XCircle } from "lucide-react";
+import { denyPendingEditAction, approvePendingEditAction } from "@/lib/actions/moderation.actions"; // Import actions
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
+
 
 interface ViewEditDetailsProps {
   edit: AdminPendingEdit;
 }
 
 export function ViewEditDetails({ edit }: ViewEditDetailsProps) {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const getProposerInfo = (edit: AdminPendingEdit) => {
     if (edit.users) {
       return edit.users.full_name || edit.users.email || edit.proposer_id;
@@ -32,6 +39,31 @@ export function ViewEditDetails({ edit }: ViewEditDetailsProps) {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
   };
+
+  const handleDeny = async () => {
+    setIsSubmitting(true);
+    // In a real scenario, prompt for a reason here
+    const result = await denyPendingEditAction(edit.id);
+    if (result.success) {
+      toast({ title: "Edit Denied", description: "The pending edit has been denied." });
+      // Optionally close dialog or trigger refresh through other means if revalidatePath isn't immediate
+    } else {
+      toast({ title: "Error", description: result.error || "Failed to deny edit.", variant: "destructive" });
+    }
+    setIsSubmitting(false);
+  };
+
+  const handleApprove = async () => {
+    setIsSubmitting(true);
+    const result = await approvePendingEditAction(edit.id); // Placeholder
+    if (result.success) {
+      toast({ title: "Edit Approved (Placeholder)", description: "The pending edit has been approved." });
+    } else {
+      toast({ title: "Error", description: result.error || "Failed to approve edit.", variant: "destructive" });
+    }
+    setIsSubmitting(false);
+  };
+
 
   return (
     <Dialog>
@@ -47,7 +79,7 @@ export function ViewEditDetails({ edit }: ViewEditDetailsProps) {
             Review Pending Edit: <Badge variant="secondary" className="ml-2">{edit.entity_type}</Badge>
           </DialogTitle>
           <DialogDescription>
-            Proposed by: {getProposerInfo(edit)} on {formatDate(edit.created_at)}
+            Proposer ID: {edit.proposer_id} (Name: {getProposerInfo(edit)}) on {formatDate(edit.created_at)}
           </DialogDescription>
         </DialogHeader>
 
@@ -68,36 +100,34 @@ export function ViewEditDetails({ edit }: ViewEditDetailsProps) {
                 {JSON.stringify(edit.proposed_data, null, 2)}
               </pre>
             </div>
-
-            {/* Placeholder for showing diff if applicable */}
-            {/* 
-            <div>
-              <h4 className="font-semibold mb-1 text-sm">Data Diff (Current vs Proposed):</h4>
-              <pre className="p-3 bg-muted/80 rounded-md text-xs overflow-x-auto max-h-96">
-                // Diff logic would go here
-                // For example, showing what changed from the original record
-                {`Original: ${JSON.stringify({ some_field: "old_value" }, null, 2)}\nProposed: ${JSON.stringify(edit.proposed_data, null, 2)}`}
-              </pre>
-            </div>
-            */}
+            
+            {edit.entity_id && (
+                 <div>
+                    <h4 className="font-semibold mb-1 text-sm">Target Entity ID:</h4>
+                    <p className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md">
+                        {edit.entity_id}
+                    </p>
+                </div>
+            )}
           </div>
         </ScrollArea>
 
         <DialogFooter className="gap-2 sm:gap-0">
            <DialogClose asChild>
-            <Button type="button" variant="outline">
+            <Button type="button" variant="outline" disabled={isSubmitting}>
               Close
             </Button>
           </DialogClose>
-          {/* Placeholder actions - implement with server actions */}
-          <Button variant="destructive" disabled>
-            <XCircle className="mr-2 h-4 w-4" /> Deny (Not Implemented)
+          <Button variant="destructive" onClick={handleDeny} disabled={isSubmitting}>
+            <XCircle className="mr-2 h-4 w-4" /> {isSubmitting ? "Denying..." : "Deny"}
           </Button>
-          <Button variant="default" disabled>
-            <CheckCircle className="mr-2 h-4 w-4" /> Approve (Not Implemented)
+          <Button variant="default" onClick={handleApprove} disabled={true || isSubmitting}> {/* Approve disabled for now */}
+            <CheckCircle className="mr-2 h-4 w-4" /> {isSubmitting ? "Approving..." : "Approve (WIP)"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
+    

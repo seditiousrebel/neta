@@ -3,7 +3,6 @@
 "use server";
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { User } from '@/types/entities';
 import type { AdminPendingEdit } from '@/types/entities';
 
 /**
@@ -49,10 +48,13 @@ export async function getPendingEdits(options: { page?: number } = {}): Promise<
     .select(`
       id,
       entity_type,
+      entity_id,
       proposed_data,
       change_reason,
       created_at,
       proposer_id,
+      status,
+      admin_feedback,
       users (id, email, full_name)
     `)
     .eq('status', 'Pending')
@@ -74,20 +76,43 @@ export async function approveEdit(editId: number): Promise<{ success: boolean, e
   // 4. Update the pending_edit status to 'Approved'.
   // 5. Potentially award contribution points to the proposer.
   console.log(`Approving edit ${editId} - NOT IMPLEMENTED`);
+  const supabase = createSupabaseServerClient();
+  // Example:
+  // const { data: edit, error: fetchError } = await supabase.from('pending_edits').select('*').eq('id', editId).single();
+  // if (fetchError || !edit) return { success: false, error: "Edit not found" };
+  // if (edit.entity_type === 'politician' && edit.entity_id && edit.proposed_data) {
+  //   const { error: updateError } = await supabase.from('politicians').update(edit.proposed_data as any).eq('id', edit.entity_id);
+  //   if (updateError) return { success: false, error: `Failed to update politician: ${updateError.message}`};
+  // }
+  // const { error: statusError } = await supabase.from('pending_edits').update({ status: 'Approved', admin_feedback: 'Approved by admin' }).eq('id', editId);
+  // if (statusError) return { success: false, error: `Failed to update edit status: ${statusError.message}`};
+  
   await new Promise(resolve => setTimeout(resolve, 500)); // Simulate async work
   return { success: true }; // Placeholder
 }
 
 export async function denyEdit(editId: number, reason: string): Promise<{ success: boolean, error?: string }> {
-  // Placeholder: Implement logic to:
-  // 1. Update the pending_edit status to 'Denied'.
-  // 2. Store the 'reason' in an admin_feedback field in pending_edits.
-  console.log(`Denying edit ${editId} with reason: ${reason} - NOT IMPLEMENTED`);
-  await new Promise(resolve => setTimeout(resolve, 500)); // Simulate async work
-  return { success: true }; // Placeholder
+  const supabase = createSupabaseServerClient();
+  const { error } = await supabase
+    .from('pending_edits')
+    .update({ 
+      status: 'Denied', 
+      admin_feedback: reason,
+      updated_at: new Date().toISOString() 
+    })
+    .eq('id', editId);
+
+  if (error) {
+    console.error(`Error denying edit ${editId}:`, error.message);
+    return { success: false, error: error.message };
+  }
+  console.log(`Edit ${editId} denied with reason: ${reason}`);
+  return { success: true };
 }
 
 
 // Placeholder for user management functions
 // export async function listUsers(options: { page?: number, limit?: number, search?: string }) { /* ... */ }
 // export async function updateUserRole(userId: string, newRole: User['role']) { /* ... */ }
+
+    

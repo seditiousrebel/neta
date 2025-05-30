@@ -38,7 +38,7 @@ export interface PromiseItem { // Renamed from Promise to avoid conflict with JS
 export interface LegislativeBill {
   id: string;
   title: string;
-  summary: string;
+  summary: string | null; // Made summary nullable based on usage in VotingHistory
   status: "proposed" | "passed" | "rejected" | "in_committee";
   sponsorId?: string; // Politician ID
   bill_number?: string | null;
@@ -146,7 +146,7 @@ export type PoliticianFiltersState = {
 
 // Types for Detailed Politician Page
 export type PoliticianMediaAsset = {
-  id: number;
+  id?: number; // Made optional as it might not always be fetched or relevant for all media assets
   storage_path: string | null;
   alt_text?: string | null;
   caption?: string | null;
@@ -158,7 +158,6 @@ export type PoliticianParty = {
   name_nepali?: string | null;
   abbreviation?: string | null;
   logo_asset_id?: number | null;
-  // Assuming logo is fetched as nested media_asset
   logo?: PoliticianMediaAsset | null;
   ideology?: string | null;
 };
@@ -250,13 +249,18 @@ export type DetailedPolitician = {
 export type AdminPendingEdit = {
   id: number;
   entity_type: string;
+  entity_id: number | string | null; // ID of the entity being edited, can be number or string (UUID)
   proposed_data: any; // JSON; consider a more specific type if possible
   change_reason: string | null;
   created_at: string;
   proposer_id: string;
+  status: string; // e.g., 'Pending', 'Approved', 'Denied'
+  admin_feedback: string | null; // Reason for approval/denial by admin
   users: { // Proposer details
     id: string;
     email: string | null;
     full_name: string | null;
   } | null;
 };
+
+    

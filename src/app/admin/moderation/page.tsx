@@ -7,10 +7,11 @@ import { Edit, ShieldAlert, MessageSquare, CheckCircle, XCircle, UserCircle } fr
 import { getPendingEdits } from "@/lib/supabase/admin";
 import type { AdminPendingEdit } from "@/types/entities";
 import { Badge } from "@/components/ui/badge";
-import { ViewEditDetails } from "@/components/admin/moderation/ViewEditDetails"; // New import
+import { ViewEditDetails } from "@/components/admin/moderation/ViewEditDetails";
+import { denyPendingEditAction, approvePendingEditAction } from "@/lib/actions/moderation.actions"; // Import actions
+import { useToast } from "@/hooks/use-toast"; // To show feedback, but we can't use hooks directly in server components. Feedback must be client-side or via redirects.
 
 export default async function ModerationPage() {
-  // For now, fetch the first page of pending edits
   const { edits: pendingEdits, count: totalPendingEdits } = await getPendingEdits({ page: 1 });
 
   const formatDate = (dateString: string) => {
@@ -23,6 +24,30 @@ export default async function ModerationPage() {
     }
     return edit.proposer_id;
   };
+
+  // Server action needs to be callable from a form
+  const denyAction = async (formData: FormData) => {
+    "use server";
+    const editId = Number(formData.get("editId"));
+    if (!editId) return; // Or handle error
+    // In a real scenario, you might get a reason from the form too
+    const result = await denyPendingEditAction(editId); 
+    // Revalidation is handled in the action. For direct feedback, client component + toast is better.
+    if (!result.success) {
+        console.error("Failed to deny edit:", result.error);
+    }
+  };
+  
+  const approveAction = async (formData: FormData) => {
+    "use server";
+    const editId = Number(formData.get("editId"));
+    if (!editId) return;
+    const result = await approvePendingEditAction(editId); // Placeholder
+    if (!result.success) {
+        console.error("Failed to approve edit:", result.error);
+    }
+  };
+
 
   return (
     <div className="space-y-8">
@@ -79,14 +104,19 @@ export default async function ModerationPage() {
                         </TableCell>
                         <TableCell>{formatDate(edit.created_at)}</TableCell>
                         <TableCell className="text-right space-x-2">
-                          <ViewEditDetails edit={edit} /> {/* Use the new component here */}
-                          {/* Placeholder actions - implement with server actions */}
-                          <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700 hover:bg-green-100" title="Approve (Not Implemented)" disabled>
-                            <CheckCircle className="h-5 w-5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-100" title="Deny (Not Implemented)" disabled>
-                            <XCircle className="h-5 w-5" />
-                          </Button>
+                          <ViewEditDetails edit={edit} />
+                          <form action={approveAction} className="inline-block">
+                            <input type="hidden" name="editId" value={edit.id} />
+                            <Button type="submit" variant="ghost" size="icon" className="text-green-600 hover:text-green-700 hover:bg-green-100" title="Approve" disabled>
+                              <CheckCircle className="h-5 w-5" />
+                            </Button>
+                          </form>
+                          <form action={denyAction} className="inline-block">
+                            <input type="hidden" name="editId" value={edit.id} />
+                            <Button type="submit" variant="ghost" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-100" title="Deny">
+                              <XCircle className="h-5 w-5" />
+                            </Button>
+                          </form>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -133,3 +163,5 @@ export default async function ModerationPage() {
     </div>
   );
 }
+
+    
