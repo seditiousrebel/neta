@@ -2,7 +2,7 @@
 // src/app/politicians/[id]/edit/page.tsx
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, use } from 'react'; // Added 'use'
 import PoliticianForm, { type PoliticianFormData } from '@/components/contribute/PoliticianForm';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
@@ -18,10 +18,11 @@ interface EditPoliticianPageProps {
   params: { id: string };
 }
 
-const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params }) => {
+const EditPoliticianPage: React.FC<EditPoliticianPageProps> = ({ params: paramsProp }) => {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const politicianId = params.id;
+  const resolvedParams = use(paramsProp); // Unwrap the params
+  const politicianId = resolvedParams.id;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
