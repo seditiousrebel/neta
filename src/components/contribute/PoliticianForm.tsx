@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form'; // Added useWatch
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
@@ -24,7 +24,7 @@ const LOCAL_STORAGE_KEY_NEW_POLITICIAN_EDIT_PREFIX = 'newPoliticianFormDraft_edi
 const criminalRecordSchema = z.object({
   id: z.string().uuid(),
   case_description: z.string().min(1, "Case description is required."),
-  offense_date: z.string().optional().or(z.literal('')), 
+  offense_date: z.string().optional().or(z.literal('')),
   court_name: z.string().optional(),
   case_status: z.enum(['Pending', 'Convicted', 'Acquitted', 'Discharged', '']).optional(),
   sentence_details: z.string().optional(),
@@ -46,9 +46,9 @@ const politicianFormSchema = z.object({
   gender: z.enum(['Male', 'Female', 'Other', 'PreferNotToSay', '']).optional(),
   photo_asset_id: z.string().uuid({message: "Invalid photo asset ID format."}).optional().nullable(),
 
-  biography: z.string().optional(), 
-  education_details: z.string().optional(), 
-  political_journey: z.string().optional(), 
+  biography: z.string().optional(),
+  education_details: z.string().optional(),
+  political_journey: z.string().optional(),
 
   criminal_records: z.array(criminalRecordSchema).optional().default([]),
   asset_declarations: z.array(assetDeclarationSchema).optional().default([]),
@@ -167,7 +167,7 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({
     localStorage.removeItem(localStorageKey);
     form.reset({
       name: '', name_nepali: '', dob: '', gender: undefined, photo_asset_id: null,
-      biography: '', education_details: '', political_journey: '', 
+      biography: '', education_details: '', political_journey: '',
       criminal_records: [], asset_declarations: [],
       contact_information: { email: '', phone: '', address: '' },
       social_media_handles: { twitter: '', facebook: '', instagram: '' },
@@ -286,7 +286,7 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({
             )}
           />
         </div>
-        
+
         <h2 className="text-xl font-semibold border-b pb-2 mt-6">Criminal Records (if any)</h2>
         <FormField
             control={form.control}
