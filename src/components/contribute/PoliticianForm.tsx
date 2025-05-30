@@ -203,14 +203,13 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
               <FormMessage />
             </FormItem>
           )}
-        />
         
         <h2 className="text-xl font-semibold border-b pb-2 mt-6">Biography</h2>
         <FormField control={form.control} name="biography" render={({ field }) => (
             <FormItem>
               <FormLabel>Detailed Biography</FormLabel>
               <FormControl><Textarea placeholder="Enter detailed biography..." {...field} rows={5} /></FormControl>
-              <FormDescription>Share key information about the politician's background and career. Markdown is supported.</FormDescription>
+              <FormDescription>Share key information about the politician's background and career. Use Markdown for formatting.</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -221,8 +220,8 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
           <FormField control={form.control} name="education_details" render={({ field }) => (
               <FormItem>
                 <FormLabel>Education Details</FormLabel>
-                <FormControl><Textarea placeholder='e.g., [{"degree": "Masters", "institution": "XYZ University", "year": 2010}] or plain text.' {...field} rows={3} /></FormControl>
-                <FormDescription>Enter as structured text or JSON string (array of objects recommended).</FormDescription>
+                <FormControl><Textarea placeholder="Example:\n- Masters in Political Science, XYZ University (2010)\n- Bachelor of Arts, ABC College (2007)" {...field} rows={3} /></FormControl>
+                <FormDescription>Use Markdown for formatting. List degrees, institutions, and years.</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -230,8 +229,8 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
           <FormField control={form.control} name="political_journey" render={({ field }) => (
               <FormItem>
                 <FormLabel>Political Journey</FormLabel>
-                <FormControl><Textarea placeholder='e.g., [{"position": "Ward Member", "party": "ABC Party", "startDate": "2060-01-01"}] or plain text.' {...field} rows={4} /></FormControl>
-                <FormDescription>Detail roles, parties, and timelines. JSON string (array of objects) or structured text.</FormDescription>
+                <FormControl><Textarea placeholder="Example:\n- Ward Member, ABC Party (2060-01-01 - 2064-12-30)\n  - Focused on local infrastructure projects." {...field} rows={4} /></FormControl>
+                <FormDescription>Use Markdown for formatting. Detail roles, parties, and timelines.</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -239,8 +238,8 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
           <FormField control={form.control} name="criminal_records" render={({ field }) => (
               <FormItem>
                 <FormLabel>Criminal Records (if any)</FormLabel>
-                <FormControl><Textarea placeholder='e.g., [{"case": "Corruption Case", "status": "Pending"}] or "None"' {...field} rows={3} /></FormControl>
-                <FormDescription>Enter as JSON string, structured text, or "None".</FormDescription>
+                <FormControl><Textarea placeholder='Example:\n- Case: Alleged Irregularity (2070)\n  Status: Pending Investigation\nOr simply type "None".' {...field} rows={3} /></FormControl>
+                <FormDescription>Use Markdown for formatting. Describe any cases and their status, or state "None".</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -248,8 +247,8 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
           <FormField control={form.control} name="asset_declarations" render={({ field }) => (
               <FormItem>
                 <FormLabel>Asset Declarations</FormLabel>
-                <FormControl><Textarea placeholder='e.g., [{"year": 2078, "description": "House in KTM", "value": "1 Crore NRs"}] or plain text.' {...field} rows={4} /></FormControl>
-                <FormDescription>Enter as JSON string (array of objects) or structured text.</FormDescription>
+                <FormControl><Textarea placeholder="Example:\n**Year 2078**\n- House in KTM, Value: 1 Crore NRs\n- Land in Pokhara, Value: 50 Lakhs NRs" {...field} rows={4} /></FormControl>
+                <FormDescription>Use Markdown for formatting. List assets, their value, and relevant years.</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
