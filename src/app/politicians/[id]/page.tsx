@@ -73,7 +73,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
     const baseSelect = `
       id, name, name_nepali, is_independent, dob, dob_bs, gender, bio, education,
       political_journey, public_criminal_records, asset_declarations,
-      twitter_handle, facebook_profile_url, instagram_profile_url, website_url,
+      twitter_handle, facebook_profile_url, website_url,
       contact_email, contact_phone,
       permanent_address, current_address, province_id, created_at, updated_at,
       photo_asset_id,
@@ -107,7 +107,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                 console.warn("Fallback: Retrying query without 'politician_career_entries' due to relationship error.");
                 const fallbackQuery = await supabase
                     .from('politicians')
-                    .select(baseSelect)
+                    .select(baseSelect) // Use baseSelect without career_entries here
                     .eq('id', numericId)
                     .maybeSingle<Omit<DetailedPolitician, 'politician_career_entries'>>();
 
@@ -116,6 +116,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                     return null;
                 }
                 if (fallbackQuery.data) {
+                    // Attempt to fetch career entries separately
                     const { data: careerData, error: careerError } = await supabase
                         .from('politician_career_entries')
                         .select('*')
@@ -123,13 +124,14 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
 
                     if (careerError) {
                         console.warn('Failed to fetch career entries in fallback:', careerError.message);
+                        // Return main data even if career entries fail
                         return { ...fallbackQuery.data, politician_career_entries: [] } as DetailedPolitician;
                     }
                     return { ...fallbackQuery.data, politician_career_entries: careerData || [] } as DetailedPolitician;
                 }
-                return null;
+                return null; // Fallback data also not found
             }
-            return null;
+            return null; // Other initial error
         }
         return data;
 
@@ -470,19 +472,19 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
         fieldType: 'text',
         politicianId: String(politician.id),
       });
-      toast({
-        title: "Edit Basic Details",
-        description: "This is a placeholder. A comprehensive form for editing all basic details would appear here. For now, editing name.",
-        variant: "info"
-      });
+      // toast({
+      //   title: "Edit Basic Details",
+      //   description: "This is a placeholder. A comprehensive form for editing all basic details would appear here. For now, editing name.",
+      //   variant: "info"
+      // });
   };
 
   const renderHeaderField = (
     label: string,
     value?: string | number | null,
     icon?: React.ReactNode,
-    fieldName?: keyof DetailedPolitician, // For edit button functionality
-    fieldType: ModalFieldType = 'text', // Default fieldType
+    fieldName?: keyof DetailedPolitician,
+    fieldType: ModalFieldType = 'text',
     editorComponent?: React.ComponentType<EditorProps<any>>,
     editorProps?: Record<string, any>,
     fieldOptions?: Array<{label: string; value: string}>
@@ -499,27 +501,13 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
         <div className="ml-2 break-words flex-grow">
           <span>{displayValue}</span>
         </div>
-        {fieldName && user && (
-          <EditButton
-            onClick={() => onOpenModal({
-              fieldName: fieldName as string,
-              fieldLabel: label,
-              currentValue: politician[fieldName] ?? '',
-              fieldType,
-              editorComponent,
-              editorProps,
-              fieldOptions: fieldOptions?.map(opt => opt.label),
-              politicianId: String(politician.id),
-            })}
-            className="ml-2"
-          />
-        )}
+        {/* Individual edit buttons removed as per user request */}
       </div>
     );
   };
 
   const renderSocialLink = (
-    platformKey: keyof Pick<DetailedPolitician, 'twitter_handle' | 'facebook_profile_url' | 'instagram_profile_url' | 'website_url'>,
+    platformKey: keyof Pick<DetailedPolitician, 'twitter_handle' | 'facebook_profile_url' | 'website_url'>, // Removed instagram
     value?: string | null,
     IconComponent?: React.ElementType,
     platformName?: string
@@ -539,18 +527,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
                 <IconComponent className="h-5 w-5" />
             </a>
         )}
-         {user && (
-          <EditButton
-            onClick={() => onOpenModal({
-              fieldName: platformKey as string,
-              fieldLabel: platformName || platformKey.toString().replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-              currentValue: value || '',
-              fieldType: 'url',
-              politicianId: String(politician.id),
-            })}
-            className="ml-1"
-          />
-        )}
+         {/* Individual edit buttons removed */}
       </div>
     );
   };
@@ -565,7 +542,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
                 fieldName: 'photo_asset_id',
                 fieldLabel: 'Profile Photo',
                 currentValue: politician.photo_asset_id || '',
-                fieldType: 'custom', // Needs a custom photo upload editor component
+                fieldType: 'custom', 
                 editorComponent: () => <p className="text-sm p-2 bg-yellow-100 border border-yellow-300 rounded">Photo upload editor component needs to be implemented here. It should handle file upload and call onChange with the new asset ID.</p>,
                 politicianId: String(politician.id)
               })}
@@ -595,18 +572,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
                 <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-1 sm:mb-0">
                     {politician.name}
                 </h1>
-                {user && (
-                    <EditButton
-                        onClick={() => onOpenModal({
-                            fieldName: 'name',
-                            fieldLabel: 'Politician Name (English)',
-                            currentValue: politician.name || '',
-                            fieldType: 'text',
-                            politicianId: String(politician.id),
-                        })}
-                        className="ml-2 -top-1"
-                    />
-                )}
+                {/* Main name edit button removed, now part of "Edit Profile Details" */}
             </div>
             {user && ( // Main Edit Button
               <Button variant="outline" size="sm" onClick={openMainProfileEditModal} className="mt-2 sm:mt-0">
@@ -636,9 +602,9 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
             {user && (
                 <EditButton
                     onClick={() => onOpenModal({
-                        fieldName: 'party_memberships', // This field needs a complex custom editor
+                        fieldName: 'party_memberships', 
                         fieldLabel: 'Party Affiliation',
-                        currentValue: politician.party_memberships || [], // Pass the array of memberships
+                        currentValue: politician.party_memberships || [], 
                         fieldType: 'custom',
                         editorComponent: () => <p className="text-sm p-2 bg-yellow-100 border border-yellow-300 rounded">Party Membership editor needs to be implemented. It should handle selecting party, dates, roles etc.</p>,
                         politicianId: String(politician.id)
@@ -663,7 +629,6 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
           <div className="flex items-center space-x-2">
             {renderSocialLink('twitter_handle', politician.twitter_handle, Twitter, 'Twitter')}
             {renderSocialLink('facebook_profile_url', politician.facebook_profile_url, Facebook, 'Facebook')}
-            {renderSocialLink('instagram_profile_url', politician.instagram_profile_url, Instagram, 'Instagram')}
             {renderSocialLink('website_url', politician.website_url, Globe, 'Website')}
           </div>
           <div className="flex items-center space-x-2 mt-3 sm:mt-0 sm:ml-4">
@@ -681,4 +646,6 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
     </header>
   );
 }
+    
+
     
