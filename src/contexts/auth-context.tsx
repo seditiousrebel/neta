@@ -37,8 +37,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     if (error) {
       console.error(`[AuthContext] fetchUserProfile: Error fetching profile from DB for user ${userId}. Message: ${error.message}. Details: ${error.details || 'No details'}. Code: ${error.code || 'No code'}. Hint: ${error.hint || 'No hint'}.`);
-      if (error.message.includes('relation "users" does not exist') || error.message.includes('permission denied for table users')) {
-          console.error("[AuthContext] RLS_POLICY_ISSUE: The error strongly suggests a Row Level Security policy is blocking access to the 'users' table or specific rows/columns, or the table itself is not found/accessible by the authenticated user's role. Ensure RLS is enabled and a policy allows 'authenticated' users to SELECT their own row (e.g., USING (auth.uid() = id)).");
+      if (error.message.includes('permission denied') || error.message.includes('relation "users" does not exist') || error.code === '42501' || error.code === 'PGRST200' || error.code === '42P01') {
+          console.error("[AuthContext] RLS_POLICY_ISSUE_SUSPECTED or TABLE_NOT_FOUND: The error suggests a Row Level Security policy is blocking access, the 'users' table is not found in the 'public' schema, or the authenticated user's role lacks permission. Please verify RLS policies on 'public.users' table in Supabase Studio. Ensure an authenticated user can SELECT their own row and the table exists and is accessible.");
       }
       return null;
     }
@@ -58,8 +58,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log('[AuthContext] authUser.user_metadata:', JSON.stringify(authUser.user_metadata, null, 2));
 
       const userProfile = await fetchUserProfile(authUser.id);
-      // console.log('[AuthContext] Fetched userProfile from DB:', userProfile ? JSON.stringify(userProfile, null, 2) : null);
-
 
       const roleFromProfile = userProfile?.role;
       const roleFromMetadata = authUser.user_metadata?.role as string | undefined;
@@ -77,7 +75,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email: authUser.email,
         name: userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
         avatarUrl: userProfile?.avatar_url || authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${(userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email || 'U').charAt(0).toUpperCase()}`,
-        role: finalRole as "User" | "Admin" | string, // Adjusted to allow "Admin" as a primary type
+        role: finalRole as "User" | "Admin" | string,
         contributionPoints: userProfile?.contribution_points || 0,
         bio: userProfile?.bio || (authUser.user_metadata?.bio as string) || null,
       };
