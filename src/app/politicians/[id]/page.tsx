@@ -8,7 +8,7 @@ import Image from 'next/image';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, notFound } from 'next/navigation';
-import Link from 'next/link'; // Corrected import for Link
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import {
   User, Cake, VenetianMask, Info, Twitter, Facebook, Instagram, Globe, Mail, Phone, MapPin,
@@ -121,7 +121,7 @@ async function getPoliticianDetails(politicianId: string): Promise<DetailedPolit
 }
 
 export default function PoliticianDetailPage({ params: serverParamsProp }: { params: { id: string } }) {
-  const resolvedServerParams = use(serverParamsProp); // Resolve server params with use() hook
+  const resolvedServerParams = use(serverParamsProp); 
   const id = resolvedServerParams.id;
 
   const { user } = useAuth();
@@ -459,81 +459,57 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
   const renderHeaderField = (
     label: string,
     value?: string | number | null,
-    icon?: React.ReactNode,
-    fieldName?: keyof DetailedPolitician, 
-    fieldType: ModalFieldType = 'text',
-    editorComponent?: React.ComponentType<EditorProps<any>>,
-    editorProps?: Record<string, any>
+    icon?: React.ReactNode
   ) => {
     if (value === undefined || value === null || String(value).trim() === '') {
-      // If no value and no specific fieldName to enable "add" functionality, render nothing or a placeholder
-      if (!fieldName) return null; 
-      // Optionally, render a placeholder or "Add" button if fieldName is present but value is empty
-      // For now, keeping it simple: if no value, don't render the field unless it's specifically for adding new.
-      // This might need adjustment based on desired "add empty field" UX.
-      // return null; 
+        return ( // Still render the field label even if value is not set, but indicate it
+          <div className="flex items-start text-sm text-gray-700 dark:text-gray-300 mb-1.5">
+            {icon && React.cloneElement(icon as React.ReactElement, { className: "h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" })}
+            <span className="font-semibold min-w-[100px] sm:min-w-[120px]">{label}:</span>
+            <div className="ml-2 break-words flex-grow">
+              <span className="italic text-muted-foreground">Not set</span>
+            </div>
+          </div>
+        );
     }
-    const displayValue = String(value ?? ''); // Ensure displayValue is a string
+    const displayValue = String(value ?? ''); 
 
     return (
-      <div className="relative group/field flex items-start text-sm text-gray-700 dark:text-gray-300 mb-1.5">
+      <div className="flex items-start text-sm text-gray-700 dark:text-gray-300 mb-1.5">
         {icon && React.cloneElement(icon as React.ReactElement, { className: "h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" })}
         <span className="font-semibold min-w-[100px] sm:min-w-[120px]">{label}:</span>
         <div className="ml-2 break-words flex-grow">
-          <span>{displayValue || <span className="italic text-muted-foreground">Not set</span>}</span>
-          {fieldName && (
-            <EditButton
-              onClick={() => onOpenModal({
-                fieldName: fieldName as string,
-                fieldLabel: label,
-                currentValue: politician[fieldName] || '', // Use empty string if null/undefined for form
-                fieldType: fieldType,
-                editorComponent: editorComponent,
-                editorProps: editorProps,
-                politicianId: String(politician.id),
-                fieldOptions: fieldName === 'province_id' ? provinceOptions : undefined,
-              })}
-            />
-          )}
+          <span>{displayValue}</span>
         </div>
       </div>
     );
   };
   
   const renderSocialLink = (
-    platformKey: keyof Pick<DetailedPolitician, 'twitter_handle' | 'facebook_profile_url'>,
     value?: string | null,
     IconComponent?: React.ElementType,
-    platformName?: string
+    platformName?: string,
+    urlPrefix?: string
   ) => {
-    if (!value && !IconComponent) return null; // If no value and no icon (for adding), render nothing
+    if (!value && !IconComponent) return null; 
     
     let href = value || '#';
-    if (platformKey === 'twitter_handle' && value) {
-        href = `https://twitter.com/${value.replace('@', '')}`;
+    if (urlPrefix && value) {
+        href = `${urlPrefix}${value.replace('@', '')}`;
     }
 
+
     return (
-      <div className="relative group/field flex items-center">
+      <div className="flex items-center">
         {IconComponent && value && (
             <a href={href} target="_blank" rel="noopener noreferrer" aria-label={`Visit ${politician.name}'s ${platformName} profile`}
             className="text-muted-foreground hover:text-primary p-1 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-md transition-colors">
                 <IconComponent className="h-5 w-5" />
             </a>
         )}
-        {IconComponent && !value && ( // Render icon for "add" if no value
-            <span className="text-muted-foreground p-1"><IconComponent className="h-5 w-5" /></span>
+        {IconComponent && !value && ( 
+            <span className="text-muted-foreground p-1"><IconComponent className="h-5 w-5 opacity-50" /></span>
         )}
-        <EditButton
-            onClick={() => onOpenModal({
-                fieldName: platformKey as string,
-                fieldLabel: `${platformName} Profile URL`,
-                currentValue: value || '',
-                fieldType: 'url',
-                politicianId: String(politician.id),
-            })}
-            className="ml-1" 
-        />
       </div>
     );
   };
@@ -542,19 +518,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
   return (
     <header className="relative group flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8 mb-8 pb-8 border-b border-gray-200 dark:border-gray-700">
       <div className="relative w-36 h-36 md:w-48 md:h-48 rounded-full overflow-hidden shadow-xl border-4 border-white dark:border-gray-800 flex-shrink-0 group/photo">
-        <div className="absolute top-1 right-1 z-10">
-            <EditButton
-              onClick={() => onOpenModal({
-                fieldName: 'photo_asset_id',
-                fieldLabel: 'Profile Photo',
-                currentValue: politician.photo_asset_id || '',
-                fieldType: 'custom', 
-                editorComponent: () => <p className="text-sm p-2 bg-yellow-100 border border-yellow-300 rounded">Photo upload editor component needs to be implemented here. It should handle file upload and call onChange with the new asset ID.</p>,
-                politicianId: String(politician.id)
-              })}
-              className="bg-white/70 hover:bg-white rounded-full p-0.5 opacity-100 sm:opacity-0 sm:group-hover/photo:opacity-100"
-            />
-        </div>
+        {/* EditButton for photo can be part of the main edit flow now */}
         {photoUrl ? (
           <Image
             src={photoUrl}
@@ -574,30 +538,26 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
       </div>
       <div className="text-center md:text-left pt-2 flex-grow">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2">
-            <div className="relative group/field">
-                <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-1 sm:mb-0">
-                    {politician.name}
-                </h1>
-                {/* Hidden edit button for name, can be shown on hover or made part of Edit Profile Details */}
-            </div>
-            <Button variant="outline" size="sm" asChild className="mt-2 sm:mt-0">
+            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-1 sm:mb-0">
+                {politician.name}
+            </h1>
+             <Button variant="outline" size="icon" asChild className="mt-2 sm:mt-0 sm:ml-4 self-center sm:self-auto" title="Edit Profile Details">
               <Link href={`/politicians/${politician.id}/edit`}>
-                <Pencil className="h-4 w-4 mr-2" /> 
-                Edit Full Profile
+                <Pencil className="h-4 w-4" /> 
               </Link>
             </Button>
         </div>
 
-        {renderHeaderField("Nepali Name", politician.name_nepali, undefined, 'name_nepali', 'text')}
-        {renderHeaderField("Province", currentProvinceName, <MapPin />, 'province_id', 'select', undefined, { options: provinceOptions })}
-        {renderHeaderField("Date of Birth (AD)", politician.dob ? new Date(politician.dob).toLocaleDateString() : null, <Cake />, 'dob', 'custom', DateEditor)}
-        {renderHeaderField("Date of Birth (BS)", politician.dob_bs, <Cake />, 'dob_bs', 'custom', DateEditor, { isBSDate: true })}
-        {renderHeaderField("Gender", politician.gender, <VenetianMask />, 'gender', 'select', undefined, { options: [{label: "Male", value: "Male"}, {label: "Female", value:"Female"}, {label: "Other", value:"Other"}, {label: "Prefer not to say", value: "PreferNotToSay"}]})}
+        {renderHeaderField("Nepali Name", politician.name_nepali)}
+        {renderHeaderField("Province", currentProvinceName, <MapPin />)}
+        {renderHeaderField("Date of Birth (AD)", politician.dob ? new Date(politician.dob).toLocaleDateString() : null, <Cake />)}
+        {renderHeaderField("Date of Birth (BS)", politician.dob_bs, <Cake />)}
+        {renderHeaderField("Gender", politician.gender, <VenetianMask />)}
         
         {activePartyMembership && activePartyMembership.parties && (
           <div className="relative group/field mt-3 mb-3 p-3 bg-muted/30 dark:bg-muted/10 rounded-lg inline-flex items-center gap-2">
               {partyLogoUrl ? (
-                <Image src={partyLogoUrl} alt={`${activePartyMembership.parties.name} logo`} width={24} height={24} className="rounded-sm" data-ai-hint="party logo small" />
+                <Image src={partyLogoUrl} alt={`${activePartyMembership.parties.name} logo`} width={24} height={24} className="rounded-sm" data-ai-hint="party logo small"/>
               ) : (
                 <Landmark className="h-6 w-6 text-muted-foreground" />
               )}
@@ -605,17 +565,6 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
                 <span className="font-semibold text-sm">{activePartyMembership.parties.name}</span>
                 {activePartyMembership.parties.abbreviation && <span className="text-xs text-muted-foreground ml-1">({activePartyMembership.parties.abbreviation})</span>}
               </div>
-                <EditButton
-                    onClick={() => onOpenModal({
-                        fieldName: 'party_memberships', 
-                        fieldLabel: 'Party Affiliation',
-                        currentValue: politician.party_memberships || [], 
-                        fieldType: 'custom',
-                        editorComponent: () => <p className="text-sm p-2 bg-yellow-100 border border-yellow-300 rounded">Party Membership editor needs to be implemented. It should handle selecting party, dates, roles etc.</p>,
-                        politicianId: String(politician.id)
-                    })}
-                    className="ml-1 static opacity-100" 
-                />
           </div>
         )}
         {politician.is_independent && !activePartyMembership && (
@@ -623,16 +572,17 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
         )}
 
         <div className="mt-4 space-y-1.5">
-          {renderHeaderField("Email", politician.contact_email, <Mail />, 'contact_email', 'text')}
-          {renderHeaderField("Phone", politician.contact_phone, <Phone />, 'contact_phone', 'text')}
-          {renderHeaderField("Permanent Address", politician.permanent_address, <MapPin />, 'permanent_address', 'textarea')}
-          {renderHeaderField("Current Address", politician.current_address, <MapPin />, 'current_address', 'textarea')}
+          {renderHeaderField("Email", politician.contact_email, <Mail />)}
+          {renderHeaderField("Phone", politician.contact_phone, <Phone />)}
+          {renderHeaderField("Permanent Address", politician.permanent_address, <MapPin />)}
+          {renderHeaderField("Current Address", politician.current_address, <MapPin />)}
         </div>
 
         <div className="mt-6 flex flex-col sm:flex-row items-center justify-center md:justify-start gap-3">
           <div className="flex items-center space-x-2">
-            {renderSocialLink('twitter_handle', politician.twitter_handle, Twitter, 'Twitter')}
-            {renderSocialLink('facebook_profile_url', politician.facebook_profile_url, Facebook, 'Facebook')}
+            {renderSocialLink(politician.twitter_handle, Twitter, 'Twitter', 'https://twitter.com/')}
+            {renderSocialLink(politician.facebook_profile_url, Facebook, 'Facebook')}
+            {/* Add Instagram or other social links here if data exists */}
           </div>
           <div className="flex items-center space-x-2 mt-3 sm:mt-0 sm:ml-4">
             <Button variant={isFollowed ? "default" : "outline"} size="sm" onClick={handleFollow} className="group">
