@@ -52,24 +52,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email: authUser.email,
         name: userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
         avatarUrl: userProfile?.avatar_url || authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${(userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email || 'U').charAt(0).toUpperCase()}`,
-        role: userProfile?.role || 'User', // Use userProfile.role
+        role: userProfile?.role || 'User', // Uses the 'role' column from public.users
         contributionPoints: userProfile?.contribution_points || 0,
         bio: userProfile?.bio || (authUser.user_metadata?.bio as string) || null,
       };
       setUser(appUser);
       setIsAuthenticated(true);
+      console.log('[AuthContext] Processed User State:', appUser); // Diagnostic log
     } else {
       setUser(null);
       setIsAuthenticated(false);
+      console.log('[AuthContext] No active session or user.'); // Diagnostic log
     }
     setIsLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase]);
+  }, [supabase]); // supabase should be a dependency
 
   useEffect(() => {
     setIsLoading(true);
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: SupabaseSession | null) => {
+        console.log('[AuthContext] Auth event:', event); // Diagnostic log
         await processSession(session);
          if (event === 'SIGNED_IN') {
         } else if (event === 'SIGNED_OUT') {
@@ -98,8 +101,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error('Logout error:', error.message);
       toast({ title: "Logout Failed", description: error.message, variant: "destructive" });
     }
-    setUser(null);
-    setIsAuthenticated(false);
+    // setUser(null); // processSession will handle this via onAuthStateChange
+    // setIsAuthenticated(false);
     setIsLoading(false);
   };
 
