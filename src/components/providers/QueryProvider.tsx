@@ -3,7 +3,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import React, { useState, Suspense } from 'react'; // Import React and Suspense
+import React, { useState, useEffect, Suspense } from 'react'; // Import React and Suspense
 
 // Conditionally import ReactQueryDevtools using React.lazy
 // This will only attempt to load the module in the development environment.
@@ -30,12 +30,18 @@ export default function QueryProvider({ children }: { children: ReactNode }) {
     },
   }));
 
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    // This effect runs only on the client, after hydration
+    setIsClient(true);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      {/* Suspense is required for React.lazy components */}
-      {/* Only render Devtools in development */}
-      {process.env.NODE_ENV === 'development' && (
+      {/* Only render Devtools in development and strictly on the client side after initial mount */}
+      {isClient && process.env.NODE_ENV === 'development' && (
         <Suspense fallback={null}> {/* fallback={null} means render nothing while loading */}
           <Devtools initialIsOpen={false} />
         </Suspense>
