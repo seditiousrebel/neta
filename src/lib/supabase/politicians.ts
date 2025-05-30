@@ -31,7 +31,7 @@ export async function getPoliticianById(politicianId: string | number): Promise<
 
   const { data, error } = await supabase
     .from('politicians')
-    .select(\`
+    .select(`
       name,
       name_nepali,
       dob,
@@ -44,18 +44,18 @@ export async function getPoliticianById(politicianId: string | number): Promise<
       asset_declarations,
       contact_information,
       social_media_handles
-    \`) 
+    `) 
     .eq('id', numericId) // Use numericId here
     .maybeSingle(); // Use maybeSingle to return null if not found, instead of erroring
 
   if (error) {
-    console.error(\`Error fetching politician with ID \${politicianId}:\`, error.message);
+    console.error(`Error fetching politician with ID ${politicianId}:`, error.message);
     return null;
   }
 
   if (!data) {
     // This is not an error, just means no politician found with that ID.
-    // console.warn(\`No politician found with ID: \${politicianId}.\`);
+    // console.warn(`No politician found with ID: ${politicianId}.`);
     return null;
   }
 
