@@ -5,20 +5,20 @@ import React, { useState, useEffect, use } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { getPublicUrlForMediaAsset } from '@/lib/uploadUtils';
 import Image from 'next/image';
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/contexts/auth-context'; // Corrected path
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, notFound } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import {
   User, Cake, VenetianMask, Info, Twitter, Facebook, Instagram, Globe, Mail, Phone, MapPin,
-  Heart, Share2, AlertTriangle, Landmark, Building, Pencil
+  Heart, Share2, AlertTriangle, Landmark, Building, Pencil, Library // Added Library for Education
 } from 'lucide-react';
 import type { PoliticianFormData } from '@/components/contribute/PoliticianForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Overview from '@/components/politicians/profile/Overview';
-import CareerTimeline from '@/components/politicians/detail/CareerTimeline';
+import CareerTimeline from '@/components/politicians/profile/CareerTimeline'; // Corrected path
 import CriminalRecords from '@/components/politicians/profile/CriminalRecords';
 import { EditModal, EditModalProps, FieldType as ModalFieldType, EditorProps } from '@/components/wiki/EditModal';
 import { EditButton } from '@/components/wiki/EditButton';
@@ -29,8 +29,8 @@ import { AssetDeclarationEditor, AssetDeclarationEditorProps } from '@/component
 import AssetDeclarations from '@/components/politicians/profile/AssetDeclarations';
 import EditHistory from '@/components/politicians/profile/EditHistory';
 import VotingHistory from '@/components/politicians/detail/VotingHistory';
-import type { DetailedPolitician, PoliticianPartyMembership, PoliticianParty, PoliticianMediaAsset } from '@/types/entities';
-
+import type { DetailedPolitician, PoliticianPartyMembership, PoliticianParty, PoliticianMediaAsset, ProvinceFilterOption } from '@/types/entities';
+import { getProvinceFilterOptions } from '@/lib/supabase/data'; // For province dropdown
 
 interface ModalContentData {
   fieldName: string;
@@ -45,7 +45,7 @@ interface ModalContentData {
 
 // PoliticianDetailPage - Main Component
 export default function PoliticianDetailPage({ params: serverParamsProp }: { params: { id: string } }) {
-  const resolvedServerParams = use(serverParamsProp);
+  const resolvedServerParams = use(serverParamsProp); // For Next.js 13+ App Router with `use`
   const id = resolvedServerParams.id;
 
   const { user } = useAuth();
@@ -56,6 +56,8 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
   const [politician, setPolitician] = useState<DetailedPolitician | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [provinceOptions, setProvinceOptions] = useState<ProvinceFilterOption[]>([]);
+
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState<Partial<ModalContentData>>({});
@@ -105,7 +107,8 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
         position_titles ( * )
       ),
       bill_votes!politician_id ( *, legislative_bills ( * ) ),
-      promises!politician_id ( * )
+      promises!politician_id ( * ),
+      provinces (id, name)
     `;
 
     try {
@@ -121,7 +124,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                 console.warn("Fallback: Retrying query without 'politician_career_entries' due to relationship error.");
                 const fallbackQuery = await supabase
                     .from('politicians')
-                    .select(baseSelect)
+                    .select(baseSelect) // Use baseSelect without career entries
                     .eq('id', numericId)
                     .maybeSingle<Omit<DetailedPolitician, 'politician_career_entries'>>();
 
@@ -130,6 +133,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                     return null;
                 }
                 if (fallbackQuery.data) {
+                    // Manually fetch career entries in a separate query
                     const { data: careerData, error: careerError } = await supabase
                         .from('politician_career_entries')
                         .select('*')
@@ -137,13 +141,14 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
 
                     if (careerError) {
                         console.warn('Failed to fetch career entries in fallback:', careerError.message);
+                        // Return main data even if career entries fail
                         return { ...fallbackQuery.data, politician_career_entries: [] } as DetailedPolitician;
                     }
                     return { ...fallbackQuery.data, politician_career_entries: careerData || [] } as DetailedPolitician;
                 }
-                return null;
+                return null; // Fallback data also not found
             }
-            return null;
+            return null; // Original error was not the specific career_entries one
         }
         return data;
 
@@ -169,7 +174,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
         if (details.media_assets?.storage_path) {
           const url = await getPublicUrlForMediaAsset(String(details.media_assets.storage_path));
           setPhotoUrl(url);
-        } else if (details.photo_asset_id) { // If photo_asset_id is directly on politician table
+        } else if (details.photo_asset_id) {
           const { data: mediaAssetForPhoto, error: mediaError } = await supabase
             .from('media_assets')
             .select('storage_path')
@@ -190,8 +195,15 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
       }
       setIsLoading(false);
     }
+
+    async function loadProvinceOptions() {
+      const options = await getProvinceFilterOptions(); // Assuming this fetches [{id: '1', name: 'Province 1'}, ...]
+      setProvinceOptions(options);
+    }
+
     loadData();
-  }, [id, supabase]); // Added supabase to dependencies
+    loadProvinceOptions();
+  }, [id, supabase]);
 
 
   const openModal = (data: ModalContentData) => {
@@ -225,10 +237,17 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
     return <div className="container mx-auto p-4 py-8 text-center">Loading politician profile...</div>;
   }
 
+  const mappedProvinceOptions = provinceOptions.map(p => ({ label: p.name, value: String(p.id) }));
+
   return (
     <>
       <div className="container mx-auto p-4 py-8 md:py-12 max-w-5xl">
-      <ProfileHeader politician={politician} photoUrl={photoUrl} onOpenModal={openModal} />
+      <ProfileHeader
+        politician={politician}
+        photoUrl={photoUrl}
+        onOpenModal={openModal}
+        provinceOptions={mappedProvinceOptions}
+      />
 
         <div className="mt-10">
           <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200 text-center sr-only">Detailed Information</h2>
@@ -264,8 +283,9 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                         onClick={() => openModal({
                             fieldName: 'education',
                             fieldLabel: 'Education',
-                            currentValue: politician.education || '', // Assuming education is stored as JSON string
-                            fieldType: 'textarea', // Or custom for structured education entries
+                            currentValue: politician.education || '',
+                            fieldType: 'textarea',
+                            editorProps: { placeholder: 'Enter education details, ideally as JSON or structured text.'},
                             politicianId: String(politician.id),
                         })}
                        className="static opacity-100"
@@ -275,7 +295,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                 <CardContent className="pt-6">
                   <Overview
                     biography={politician.bio}
-                    education={politician.education}
+                    education={politician.education} // Pass education here
                     currentPositionData={politician.politician_positions?.find(p => p.is_current)}
                     currentPartyData={politician.party_memberships?.find(pm => pm.is_active)}
                   />
@@ -289,11 +309,11 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                   <CardTitle>Career Timeline</CardTitle>
                    <EditButton
                         onClick={() => openModal({
-                            fieldName: 'political_journey', // This field stores career entries
+                            fieldName: 'political_journey',
                             fieldLabel: 'Political Journey / Career Entries',
-                            currentValue: politician.political_journey || [], // Assuming JSON string or array
-                            fieldType: 'custom',
-                            editorComponent: () => <p>Political Journey/Career Editor (to be implemented)</p>, // Placeholder
+                            currentValue: politician.political_journey || [],
+                            fieldType: 'textarea',
+                            editorProps: { placeholder: 'Enter political journey, ideally as JSON or structured text.'},
                             politicianId: String(politician.id),
                         })}
                         className="static opacity-100"
@@ -392,15 +412,18 @@ interface ProfileHeaderProps {
   politician: DetailedPolitician;
   photoUrl: string | null;
   onOpenModal: (data: ModalContentData) => void;
+  provinceOptions: Array<{label: string; value: string}>; // For province select
 }
 
-function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps) {
+function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: ProfileHeaderProps) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [isFollowed, setIsFollowed] = useState(false);
+  const [isFollowed, setIsFollowed] = useState(false); // Placeholder
   const supabase = createSupabaseBrowserClient();
   const [partyLogoUrl, setPartyLogoUrl] = useState<string | null>(null);
   const activePartyMembership = politician.party_memberships?.find(pm => pm.is_active);
+  const currentProvinceName = politician.provinces?.name || 'N/A';
+
 
   useEffect(() => {
     const fetchPartyLogo = async () => {
@@ -464,15 +487,16 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
     icon?: React.ReactNode,
     isLink: boolean = false,
     fieldType?: ModalFieldType,
-    fieldName?: string,
+    fieldName?: keyof DetailedPolitician, // Use keyof for type safety
     editorComponent?: React.ComponentType<EditorProps<any>>,
     editorProps?: Record<string, any>,
-    fieldOptions?: string[]
+    fieldOptions?: Array<{label: string; value: string}> // For select field options
   ) => {
     if (value === undefined || value === null || String(value).trim() === '') {
-      return null;
+      // Still render if there's a fieldName, so it can be edited to add value
+      if (!fieldName) return null;
     }
-    const displayValue = String(value);
+    const displayValue = String(value ?? '');
 
     return (
       <div className="relative group/field flex items-start text-sm text-gray-700 dark:text-gray-300 mb-1.5">
@@ -481,22 +505,22 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
         <div className="ml-2 break-words flex-grow">
           {isLink && typeof value === 'string' && value.trim() !== '' ? (
             <a href={value.startsWith('http') ? value : `mailto:${value}`} target="_blank" rel="noopener noreferrer" className="hover:underline text-primary dark:text-blue-400 break-all">
-              {displayValue}
+              {displayValue || <span className="italic text-muted-foreground">Not set</span>}
             </a>
           ) : (
-            <span>{displayValue}</span>
+            <span>{displayValue || <span className="italic text-muted-foreground">Not set</span>}</span>
           )}
         </div>
         {fieldName && fieldType && (
           <EditButton
             onClick={() => onOpenModal({
-              fieldName,
+              fieldName: fieldName as string,
               fieldLabel: label,
-              currentValue: politician[fieldName as keyof DetailedPolitician] ?? '',
+              currentValue: politician[fieldName] ?? '',
               fieldType,
               editorComponent,
               editorProps,
-              fieldOptions, // Pass options for select type
+              fieldOptions: fieldOptions?.map(opt => opt.label), // Pass labels for display in select
               politicianId: String(politician.id),
             })}
           />
@@ -505,40 +529,55 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
     );
   };
 
-  const renderSocialLink = (platformKey: 'twitter_handle' | 'facebook_profile_url', value?: string | null, fieldName?: string) => {
-    if (!value) return null;
-    let IconComponent: React.ElementType = Globe;
-    let href = value;
+  const renderSocialLink = (platformKey: 'twitter_handle' | 'facebook_profile_url', value?: string | null, fieldName?: keyof DetailedPolitician) => {
+    if (!value && !fieldName) return null; // If no value and no fieldName (to edit), render nothing
+    
+    let IconComponent: React.ElementType | null = null;
+    let href = value || '#';
     let platformName = '';
+    let placeholderText = "Not set";
 
-    if (platformKey === 'twitter_handle' && value) {
+    if (platformKey === 'twitter_handle') {
         IconComponent = Twitter;
-        href = `https://twitter.com/${value.replace('@', '')}`;
+        if (value) href = `https://twitter.com/${value.replace('@', '')}`;
         platformName = 'Twitter';
-    } else if (platformKey === 'facebook_profile_url' && value) {
+        placeholderText = "Add Twitter Handle";
+    } else if (platformKey === 'facebook_profile_url') {
         IconComponent = Facebook;
-        href = value;
+        if (value) href = value;
         platformName = 'Facebook';
+        placeholderText = "Add Facebook URL";
     } else {
-        return null;
+        return null; // Should not happen with current usage
     }
 
     return (
       <div className="relative group/field flex items-center">
-        <a href={href} target="_blank" rel="noopener noreferrer" aria-label={`Visit ${politician.name}'s ${platformName} profile`}
-           className="text-muted-foreground hover:text-primary p-1 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-md transition-colors">
-            <IconComponent className="h-5 w-5" />
-        </a>
+        {IconComponent && (
+            value ? (
+                <a href={href} target="_blank" rel="noopener noreferrer" aria-label={`Visit ${politician.name}'s ${platformName} profile`}
+                className="text-muted-foreground hover:text-primary p-1 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-md transition-colors">
+                    <IconComponent className="h-5 w-5" />
+                </a>
+            ) : (
+                 <div className="text-muted-foreground p-1 rounded-md opacity-50">
+                    <IconComponent className="h-5 w-5" />
+                 </div>
+            )
+        )}
+         {!value && fieldName && (
+           <span className="text-xs text-muted-foreground italic ml-1 mr-1">{placeholderText}</span>
+        )}
         {fieldName && (
           <EditButton
             onClick={() => onOpenModal({
-                fieldName,
+                fieldName: fieldName as string,
                 fieldLabel: platformName,
-                currentValue: value,
+                currentValue: value || '',
                 fieldType: 'url',
                 politicianId: String(politician.id),
             })}
-            className="ml-1"
+            className="ml-1 static opacity-100 sm:opacity-0 sm:group-hover/field:opacity-100"
           />
         )}
       </div>
@@ -548,18 +587,18 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
 
   return (
     <header className="relative group flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8 mb-8 pb-8 border-b border-gray-200 dark:border-gray-700">
-      <div className="relative w-36 h-36 md:w-48 md:h-48 rounded-full overflow-hidden shadow-xl border-4 border-white dark:border-gray-800 flex-shrink-0">
+      <div className="relative w-36 h-36 md:w-48 md:h-48 rounded-full overflow-hidden shadow-xl border-4 border-white dark:border-gray-800 flex-shrink-0 group/photo">
         <div className="absolute top-1 right-1 z-10">
             <EditButton
               onClick={() => onOpenModal({
                 fieldName: 'photo_asset_id',
                 fieldLabel: 'Profile Photo',
                 currentValue: politician.photo_asset_id || (politician.media_assets as PoliticianMediaAsset | null)?.storage_path || '',
-                fieldType: 'custom', // Needs a custom photo uploader component
-                editorComponent: () => <p>Photo editing UI (e.g., PhotoUpload component) goes here.</p>,
+                fieldType: 'custom',
+                editorComponent: () => <p className="text-sm p-2 bg-yellow-100 border border-yellow-300 rounded">Photo upload editor component needs to be implemented here. It should handle file upload and call onChange with the new asset ID.</p>,
                 politicianId: String(politician.id),
               })}
-              className="bg-white/70 hover:bg-white rounded-full p-0.5"
+              className="bg-white/70 hover:bg-white rounded-full p-0.5 opacity-100 sm:opacity-0 sm:group-hover/photo:opacity-100"
             />
         </div>
         {photoUrl ? (
@@ -580,7 +619,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
         )}
       </div>
       <div className="text-center md:text-left pt-2 flex-grow">
-        <div className="relative group/field inline-block">
+        <div className="relative group/field inline-block mb-1">
             <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight">{politician.name}</h1>
             <EditButton
                 onClick={() => onOpenModal({
@@ -592,24 +631,10 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
                 })}
             />
         </div>
-        {politician.name_nepali && (
-          <div className="relative group/field inline-block">
-            <p className="text-xl text-muted-foreground dark:text-gray-400 mt-1">{politician.name_nepali}</p>
-             <EditButton
-                onClick={() => onOpenModal({
-                    fieldName: 'name_nepali',
-                    fieldLabel: 'Name (Nepali)',
-                    currentValue: politician.name_nepali || '',
-                    fieldType: 'text',
-                    politicianId: String(politician.id),
-                })}
-            />
-          </div>
-        )}
+        {renderHeaderField("Nepali Name", politician.name_nepali, undefined, false, 'text', 'name_nepali')}
 
         {activePartyMembership && activePartyMembership.parties && (
-          <div className="relative group/field mt-3 mb-3 p-3 bg-muted/30 dark:bg-muted/10 rounded-md inline-block">
-            <div className="flex items-center gap-2">
+          <div className="relative group/field mt-3 mb-3 p-3 bg-muted/30 dark:bg-muted/10 rounded-lg inline-flex items-center gap-2">
               {partyLogoUrl ? (
                 <Image src={partyLogoUrl} alt={`${activePartyMembership.parties.name} logo`} width={24} height={24} className="rounded-sm" data-ai-hint="party logo small"/>
               ) : (
@@ -619,14 +644,13 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
                 <span className="font-semibold text-sm">{activePartyMembership.parties.name}</span>
                 {activePartyMembership.parties.abbreviation && <span className="text-xs text-muted-foreground ml-1">({activePartyMembership.parties.abbreviation})</span>}
               </div>
-            </div>
             <EditButton
                 onClick={() => onOpenModal({
-                    fieldName: 'party_memberships',
+                    fieldName: 'party_memberships', // This field needs a complex custom editor
                     fieldLabel: 'Party Affiliation',
                     currentValue: politician.party_memberships || [],
                     fieldType: 'custom',
-                    editorComponent: () => <p>Party Membership Editor (to be implemented)</p>,
+                    editorComponent: () => <p className="text-sm p-2 bg-yellow-100 border border-yellow-300 rounded">Party Membership editor needs to be implemented. It should handle selecting party, dates, roles etc.</p>,
                     politicianId: String(politician.id),
                 })}
             />
@@ -635,12 +659,12 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
         {politician.is_independent && !activePartyMembership && (
              <Badge variant="secondary" className="mt-3 mb-3">Independent</Badge>
         )}
-
+        {renderHeaderField("Province", currentProvinceName, <MapPin />, false, 'select', 'province_id', undefined, undefined, provinceOptions)}
 
         <div className="mt-4 space-y-1.5">
           {renderHeaderField("Date of Birth (AD)", politician.dob ? new Date(politician.dob).toLocaleDateString() : null, <Cake />, false, 'custom', 'dob', DateEditor)}
           {renderHeaderField("Date of Birth (BS)", politician.dob_bs, <Cake />, false, 'custom', 'dob_bs', DateEditor, { isBSDate: true })}
-          {renderHeaderField("Gender", politician.gender, <VenetianMask />, false, 'select', 'gender', undefined, undefined, ['Male', 'Female', 'Other', 'PreferNotToSay'])}
+          {renderHeaderField("Gender", politician.gender, <VenetianMask />, false, 'select', 'gender', undefined, undefined, [{label: 'Male', value: 'Male'}, {label: 'Female', value: 'Female'}, {label: 'Other', value: 'Other'}, {label: 'PreferNotToSay', value: 'Prefer Not To Say'}].map(o => ({label: o.label, value: o.value})))}
           {renderHeaderField("Email", politician.contact_email, <Mail />, true, 'text', 'contact_email')}
           {renderHeaderField("Phone", politician.contact_phone, <Phone />, false, 'text', 'contact_phone')}
           {renderHeaderField("Permanent Address", politician.permanent_address, <MapPin />, false, 'textarea', 'permanent_address')}
@@ -651,7 +675,6 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
           <div className="flex items-center space-x-2">
             {renderSocialLink('twitter_handle', politician.twitter_handle, 'twitter_handle')}
             {renderSocialLink('facebook_profile_url', politician.facebook_profile_url, 'facebook_profile_url')}
-            {/* Add Instagram or other social links similarly */}
           </div>
           <div className="flex items-center space-x-2 mt-3 sm:mt-0 sm:ml-4">
             <Button variant={isFollowed ? "default" : "outline"} size="sm" onClick={handleFollow} className="group">
@@ -668,5 +691,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
     </header>
   );
 }
+
+    
 
     

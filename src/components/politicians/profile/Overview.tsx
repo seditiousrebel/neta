@@ -2,6 +2,7 @@
 // src/components/politicians/profile/Overview.tsx
 import React from 'react';
 import type { CareerJourneyEntry, PoliticianPosition, PoliticianPartyMembership } from '@/types/entities'; // Assuming types are defined
+import { Library } from 'lucide-react'; // For education section
 
 interface OverviewProps {
   biography?: string | null;
@@ -22,11 +23,15 @@ const Overview: React.FC<OverviewProps> = ({
       const parsed = JSON.parse(education);
       if (Array.isArray(parsed)) {
         educationEntries = parsed;
-      } else if (typeof parsed === 'object' && parsed !== null) {
+      } else if (typeof parsed === 'object' && parsed !== null && Object.keys(parsed).length > 0) {
         educationEntries = [parsed]; // Handle single object case
       } else {
-        // If it's a non-JSON string, display as is
-        educationEntries = [{ rawText: education }];
+        if (Object.keys(parsed).length === 0 && !Array.isArray(parsed)) {
+          // Parsed to empty object
+           educationEntries = [{ rawText: "No educational details provided." }];
+        } else {
+          educationEntries = [{ rawText: education }]; // Display as is if not an array/object or non-empty
+        }
       }
     } catch (e) {
       console.warn("Failed to parse education JSON in Overview, displaying as raw text:", e);
@@ -64,18 +69,29 @@ const Overview: React.FC<OverviewProps> = ({
 
       {educationEntries.length > 0 && (
         <section>
-          <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">Education</h3>
+          <h3 className="text-lg font-semibold mb-2 flex items-center text-gray-800 dark:text-gray-200">
+            <Library className="h-5 w-5 mr-2 text-primary" />
+            Education
+          </h3>
           {educationEntries.map((edu, index) => (
-            <div key={index} className="mb-1 p-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+            <div key={index} className="mb-2 p-3 border rounded-md bg-muted/30 dark:bg-muted/10 shadow-sm">
               {edu.rawText ? (
                 <p className="whitespace-pre-wrap">{edu.rawText}</p>
               ) : (
                 <>
-                  {edu.degree && <p className="font-medium">{edu.degree}</p>}
+                  {edu.degree && <p className="font-medium text-foreground">{edu.degree}</p>}
                   {edu.institution && <p className="text-xs text-muted-foreground">{edu.institution}</p>}
                   {edu.year && <p className="text-xs text-muted-foreground">Graduated: {edu.year}</p>}
                   {edu.field_of_study && <p className="text-xs text-muted-foreground">Field: {edu.field_of_study}</p>}
-                  {edu.details && <p className="text-xs mt-0.5">{edu.details}</p>}
+                  {edu.details && <p className="text-xs mt-1">{edu.details}</p>}
+                  {/* Handle other potential fields from JSON */}
+                  {Object.entries(edu)
+                    .filter(([key]) => !['degree', 'institution', 'year', 'field_of_study', 'details', 'id'].includes(key))
+                    .map(([key, val]) => (
+                      <p key={key} className="text-xs mt-0.5">
+                        <strong className="capitalize">{key.replace(/_/g, ' ')}:</strong> {String(val)}
+                      </p>
+                    ))}
                 </>
               )}
             </div>
@@ -91,5 +107,7 @@ const Overview: React.FC<OverviewProps> = ({
 };
 
 export default Overview;
+
+    
 
     
