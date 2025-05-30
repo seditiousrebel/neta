@@ -46,26 +46,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (session?.user) {
       const authUser = session.user;
       console.log('[AuthContext] Processing session for authUser ID:', authUser.id);
+      console.log('[AuthContext] authUser.user_metadata:', JSON.stringify(authUser.user_metadata, null, 2));
+
       const userProfile = await fetchUserProfile(authUser.id);
-      console.log('[AuthContext] Fetched userProfile from DB:', userProfile); // Diagnostic log
+      console.log('[AuthContext] Fetched userProfile from DB:', userProfile ? JSON.stringify(userProfile, null, 2) : null);
+
+      const roleFromProfile = userProfile?.role;
+      const roleFromMetadata = authUser.user_metadata?.role as string | undefined;
+
+      console.log(`[AuthContext] Role from DB profile (userProfile?.role): ${roleFromProfile}`);
+      console.log(`[AuthContext] Role from auth metadata (authUser.user_metadata?.role): ${roleFromMetadata}`);
+
+      const finalRole = roleFromProfile || roleFromMetadata || 'User';
+      console.log(`[AuthContext] Determined finalRole: ${finalRole}`);
+
 
       const appUser: User = {
         id: authUser.id,
         email: authUser.email,
         name: userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
         avatarUrl: userProfile?.avatar_url || authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${(userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email || 'U').charAt(0).toUpperCase()}`,
-        role: userProfile?.role || 'User', // Uses the 'role' column from public.users
+        role: finalRole,
         contributionPoints: userProfile?.contribution_points || 0,
         bio: userProfile?.bio || (authUser.user_metadata?.bio as string) || null,
       };
       setUser(appUser);
       setIsAuthenticated(true);
-      console.log('[AuthContext] Set appUser in context:', appUser); // Diagnostic log
-      console.log('[AuthContext] Effective role set in context:', appUser.role); // Specifically log the role
+      console.log('[AuthContext] Set appUser in context:', JSON.stringify(appUser, null, 2));
+      console.log('[AuthContext] Effective role set in context:', appUser.role);
     } else {
       setUser(null);
       setIsAuthenticated(false);
-      console.log('[AuthContext] No active session or user.'); // Diagnostic log
+      console.log('[AuthContext] No active session or user.');
     }
     setIsLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -75,7 +87,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: SupabaseSession | null) => {
-        console.log('[AuthContext] Auth event received:', event, 'Session present:', !!session); // Diagnostic log
+        console.log('[AuthContext] Auth event received:', event, 'Session present:', !!session);
         await processSession(session);
          if (event === 'SIGNED_IN') {
            console.log('[AuthContext] Event SIGNED_IN processed.');
@@ -137,4 +149,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-
