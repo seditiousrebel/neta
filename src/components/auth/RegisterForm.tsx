@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form'; // Added Controller
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
@@ -200,23 +200,33 @@ export function RegisterForm() {
         )}
       </div>
 
-      <div className="flex items-center space-x-2">
-        <Checkbox
-            id="acceptTerms"
-            {...form.register("acceptTerms")}
-            aria-invalid={form.formState.errors.acceptTerms ? "true" : "false"}
+      <div className="items-top flex space-x-2">
+        <Controller
+            name="acceptTerms"
+            control={form.control}
+            render={({ field }) => (
+                <Checkbox
+                    id="acceptTerms"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    ref={field.ref}
+                    aria-invalid={form.formState.errors.acceptTerms ? "true" : "false"}
+                    className="mt-0.5" // Added for better alignment with label
+                />
+            )}
         />
-        <Label htmlFor="acceptTerms" className="text-sm font-normal">
-            I accept the{' '}
-            <Link href="/terms" className="underline hover:text-primary" target="_blank">
-                Terms and Conditions
-            </Link>
-        </Label>
+        <div className="grid gap-1.5 leading-none">
+            <Label htmlFor="acceptTerms" className="text-sm font-normal">
+                I accept the{' '}
+                <Link href="/terms" className="underline hover:text-primary" target="_blank">
+                    Terms and Conditions
+                </Link>
+            </Label>
+             {form.formState.errors.acceptTerms && (
+              <p className="text-sm text-destructive">{form.formState.errors.acceptTerms.message}</p>
+            )}
+        </div>
       </div>
-       {form.formState.errors.acceptTerms && (
-          <p className="text-sm text-destructive">{form.formState.errors.acceptTerms.message}</p>
-        )}
-
 
       <Button type="submit" className="w-full" disabled={isLoading}>
         {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
