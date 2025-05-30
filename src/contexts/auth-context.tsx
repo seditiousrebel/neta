@@ -36,6 +36,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     if (error) {
       console.error(`[AuthContext] Error fetching user profile from DB for user ${userId}: ${error.message}. This might be due to Row Level Security (RLS) policies. Ensure the user has SELECT permission on their own row in the 'users' table.`);
+      // Specific log for RLS
+      if (error.message.includes('relation "users" does not exist') || error.message.includes('permission denied')) {
+          console.error("[AuthContext] RLS_POLICY_ISSUE: The error suggests a Row Level Security policy might be blocking access to the 'users' table or specific rows/columns, or the table itself is not found under the public schema for the authenticated user's role.");
+      }
       return null;
     }
     if (!data) {
@@ -62,6 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log(`[AuthContext] Role from auth metadata (authUser.user_metadata?.role): ${roleFromMetadata}`);
 
       // Prioritize role from DB profile. If not found, try metadata. Default to 'User'.
+      // Ensure 'Super Admin' is checked correctly.
       const finalRole = roleFromProfile || roleFromMetadata || 'User';
       console.log(`[AuthContext] Determined finalRole: ${finalRole}`);
 
@@ -71,7 +76,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email: authUser.email,
         name: userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
         avatarUrl: userProfile?.avatar_url || authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${(userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email || 'U').charAt(0).toUpperCase()}`,
-        role: finalRole,
+        role: finalRole as "User" | "Admin" | "Super Admin" | string, // Cast to include Super Admin
         contributionPoints: userProfile?.contribution_points || 0,
         bio: userProfile?.bio || (authUser.user_metadata?.bio as string) || null,
       };

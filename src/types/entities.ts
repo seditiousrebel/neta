@@ -5,7 +5,7 @@ export interface User {
   email?: string | null;
   avatarUrl?: string | null;
   bio?: string | null;
-  role?: "User" | "Admin" | string | null;
+  role?: "User" | "Admin" | "Super Admin" | string | null; // Added Super Admin
   contributionPoints?: number | null;
 }
 
@@ -256,5 +256,3 @@ export type AdminPendingEdit = {
     full_name: string | null;
   } | null;
 };
-
-    
