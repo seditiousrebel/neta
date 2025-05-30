@@ -4,9 +4,9 @@
 import type { User } from '@/types/entities';
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { SupabaseClient, AuthChangeEvent, Session as SupabaseSession } from '@supabase/supabase-js'; // Renamed Session to avoid conflict
+import type { SupabaseClient, AuthChangeEvent, Session as SupabaseSession } from '@supabase/supabase-js';
 import { useToast } from "@/hooks/use-toast";
-import type { Database, Tables } from '@/types/supabase'; // Ensure this path is correct
+import type { Database, Tables } from '@/types/supabase';
 
 type UserProfile = Tables<'users'>['Row'];
 
@@ -28,24 +28,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
 
   const fetchUserProfile = async (userId: string): Promise<Partial<UserProfile> | null> => {
+    console.log(`[AuthContext] fetchUserProfile: Attempting to fetch profile for userId: ${userId} from 'users' table.`);
     const { data, error } = await supabase
       .from('users')
-      .select('id, full_name, email, role, contribution_points, avatar_url, bio') // Ensure 'role' is selected
+      .select('id, full_name, email, role, contribution_points, avatar_url, bio')
       .eq('id', userId)
       .maybeSingle();
 
     if (error) {
-      console.error(`[AuthContext] Error fetching user profile from DB for user ${userId}: ${error.message}. This might be due to Row Level Security (RLS) policies. Ensure the user has SELECT permission on their own row in the 'users' table.`);
-      // Specific log for RLS
+      console.error(`[AuthContext] fetchUserProfile: Error fetching profile from DB for user ${userId}. Message: ${error.message}. Details: ${error.details || 'No details'}. Code: ${error.code || 'No code'}. Hint: ${error.hint || 'No hint'}.`);
       if (error.message.includes('relation "users" does not exist') || error.message.includes('permission denied')) {
-          console.error("[AuthContext] RLS_POLICY_ISSUE: The error suggests a Row Level Security policy might be blocking access to the 'users' table or specific rows/columns, or the table itself is not found under the public schema for the authenticated user's role.");
+          console.error("[AuthContext] RLS_POLICY_ISSUE: The error strongly suggests a Row Level Security policy is blocking access to the 'users' table or specific rows/columns, or the table itself is not found/accessible by the authenticated user's role.");
       }
       return null;
     }
     if (!data) {
-      console.warn(`[AuthContext] No user profile found in DB for user ${userId}. This could be due to RLS policies or the user record not existing in 'public.users'.`);
+      console.warn(`[AuthContext] fetchUserProfile: No user profile found in 'users' table for userId: ${userId}. This is often due to RLS policies preventing access, or the user record does not exist in 'public.users' with a matching ID column.`);
       return null;
     }
+    console.log(`[AuthContext] fetchUserProfile: Successfully fetched profile for userId ${userId}:`, JSON.stringify(data, null, 2));
     return data;
   };
 
@@ -57,7 +58,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log('[AuthContext] authUser.user_metadata:', JSON.stringify(authUser.user_metadata, null, 2));
 
       const userProfile = await fetchUserProfile(authUser.id);
-      console.log('[AuthContext] Fetched userProfile from DB:', userProfile ? JSON.stringify(userProfile, null, 2) : null);
+      // Log explicitly happens inside fetchUserProfile now
+      // console.log('[AuthContext] Fetched userProfile from DB:', userProfile ? JSON.stringify(userProfile, null, 2) : null);
+
 
       const roleFromProfile = userProfile?.role;
       const roleFromMetadata = authUser.user_metadata?.role as string | undefined;
@@ -65,8 +68,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log(`[AuthContext] Role from DB profile (userProfile?.role): ${roleFromProfile}`);
       console.log(`[AuthContext] Role from auth metadata (authUser.user_metadata?.role): ${roleFromMetadata}`);
 
-      // Prioritize role from DB profile. If not found, try metadata. Default to 'User'.
-      // Ensure 'Super Admin' is checked correctly.
       const finalRole = roleFromProfile || roleFromMetadata || 'User';
       console.log(`[AuthContext] Determined finalRole: ${finalRole}`);
 
@@ -76,7 +77,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email: authUser.email,
         name: userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
         avatarUrl: userProfile?.avatar_url || authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${(userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email || 'U').charAt(0).toUpperCase()}`,
-        role: finalRole as "User" | "Admin" | "Super Admin" | string, // Cast to include Super Admin
+        role: finalRole as "User" | "Admin" | "Super Admin" | string,
         contributionPoints: userProfile?.contribution_points || 0,
         bio: userProfile?.bio || (authUser.user_metadata?.bio as string) || null,
       };
@@ -91,7 +92,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     setIsLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase]); // supabase should be a dependency
+  }, [supabase]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -105,7 +106,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
            console.log('[AuthContext] Event SIGNED_OUT processed.');
         } else if (event === 'USER_UPDATED') {
            console.log('[AuthContext] Event USER_UPDATED received. Refreshing session data.');
-           // For USER_UPDATED, refetch the session to get the latest user_metadata from auth.users
            const { data: { session: updatedSession } } = await supabase.auth.refreshSession();
            await processSession(updatedSession ?? session);
         }
@@ -137,7 +137,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } else {
       console.log('[AuthContext] Logout successful.');
     }
-    // processSession will handle setting user to null via onAuthStateChange SIGNED_OUT event
     setIsLoading(false);
   };
 
