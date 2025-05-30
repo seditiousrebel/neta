@@ -35,7 +35,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .maybeSingle();
 
     if (error) {
-      console.error('[AuthContext] Error fetching user profile from DB:', error.message);
+      console.error(`[AuthContext] Error fetching user profile from DB for user ${userId}: ${error.message}. This might be due to Row Level Security (RLS) policies. Ensure the user has SELECT permission on their own row in the 'users' table.`);
+      return null;
+    }
+    if (!data) {
+      console.warn(`[AuthContext] No user profile found in DB for user ${userId}. This could be due to RLS policies or the user record not existing in 'public.users'.`);
       return null;
     }
     return data;
@@ -57,6 +61,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log(`[AuthContext] Role from DB profile (userProfile?.role): ${roleFromProfile}`);
       console.log(`[AuthContext] Role from auth metadata (authUser.user_metadata?.role): ${roleFromMetadata}`);
 
+      // Prioritize role from DB profile. If not found, try metadata. Default to 'User'.
       const finalRole = roleFromProfile || roleFromMetadata || 'User';
       console.log(`[AuthContext] Determined finalRole: ${finalRole}`);
 
@@ -94,8 +99,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } else if (event === 'SIGNED_OUT') {
            console.log('[AuthContext] Event SIGNED_OUT processed.');
         } else if (event === 'USER_UPDATED') {
-           console.log('[AuthContext] Event USER_UPDATED received.');
-           if (session?.user) await processSession(session);
+           console.log('[AuthContext] Event USER_UPDATED received. Refreshing session data.');
+           // For USER_UPDATED, refetch the session to get the latest user_metadata from auth.users
+           const { data: { session: updatedSession } } = await supabase.auth.refreshSession();
+           await processSession(updatedSession ?? session);
         }
       }
     );
