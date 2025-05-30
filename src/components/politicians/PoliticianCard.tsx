@@ -1,241 +1,140 @@
-
+// src/components/politicians/PoliticianCard.tsx
 "use client";
 
-import Image from 'next/image';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import type { PoliticianCardData } from '@/types/entities';
+import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Heart, Users, ShieldCheck, ArrowUp, ArrowDown, FileWarning } from 'lucide-react'; 
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { useAuth } from '@/contexts/auth-context'; 
-import { useToast } from '@/hooks/use-toast'; 
-import { useState, useEffect } from 'react';
-import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { User, ShieldAlert, Briefcase, Users, Share2, Heart } from 'lucide-react';
+
+export interface PoliticianSummary {
+  id: string; 
+  name: string;
+  name_nepali?: string | null;
+  photo_url?: string | null; 
+  current_party_name?: string | null;
+  current_position_title?: string | null;
+  has_criminal_record?: boolean | null; 
+}
 
 interface PoliticianCardProps {
-  politician: PoliticianCardData;
+  politician: PoliticianSummary;
 }
 
-function getStorageUrl(path: string | null | undefined): string | null {
-  if (!path) return null;
-  const supabase = createSupabaseBrowserClient();
-  const { data } = supabase.storage.from('media_assets').getPublicUrl(path); 
-  return data?.publicUrl || null;
-}
-
-
-export function PoliticianCard({ politician }: PoliticianCardProps) {
-  const { isAuthenticated, user } = useAuth();
-  const { toast } = useToast();
-  const supabase = createSupabaseBrowserClient();
-
-  const [isFollowed, setIsFollowed] = useState(politician.is_followed_by_user || false);
-  const [currentVoteScore, setCurrentVoteScore] = useState(politician.vote_score || 0);
-  const [userVoteStatus, setUserVoteStatus] = useState<'up' | 'down' | null>(null);
-
-  const currentPartyMembership = politician.party_memberships?.find(pm => pm.is_active);
-  const currentParty = currentPartyMembership?.parties;
-
-  const currentPositionInfo = politician.politician_positions?.find(pp => pp.is_current);
-  const currentPosition = currentPositionInfo?.position_titles;
-
-  const placeholderImage = "https://placehold.co/600x400.png";
-  const imageUrl = politician.media_assets?.storage_path 
-                   ? getStorageUrl(politician.media_assets.storage_path) 
-                   : placeholderImage;
-
-  const partyLogoUrl = currentParty?.media_assets?.storage_path 
-                      ? getStorageUrl(currentParty.media_assets.storage_path)
-                      : null;
-
-  const hasCriminalRecord = politician.public_criminal_records && politician.public_criminal_records.trim() !== '';
+const PoliticianCard: React.FC<PoliticianCardProps> = ({ politician }) => {
+  const [isFollowed, setIsFollowed] = useState(false);
+  const [currentPhotoUrl, setCurrentPhotoUrl] = useState(politician.photo_url || '/placeholder-person.png');
 
   useEffect(() => {
-    const fetchUserVote = async () => {
-      if (isAuthenticated && user) {
-        const { data, error } = await supabase
-          .from('politician_votes')
-          .select('vote_type')
-          .eq('politician_id', politician.id)
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (error) {
-          console.error("Error fetching user vote", error);
-        } else if (data) {
-          setUserVoteStatus(data.vote_type === 1 ? 'up' : 'down');
-        }
-      }
-    };
-    fetchUserVote();
-  }, [isAuthenticated, user, politician.id, supabase]);
-
+    setCurrentPhotoUrl(politician.photo_url || '/placeholder-person.png');
+  }, [politician.photo_url]);
 
   const handleFollow = async () => {
-    // Placeholder
     setIsFollowed(!isFollowed);
-    toast({ title: isFollowed ? `Unfollowed ${politician.name}` : `Following ${politician.name}` });
-  };
-  
-  const handleVote = async (newVoteType: 'up' | 'down') => {
-    if (!isAuthenticated || !user) {
-      toast({ title: "Please log in to vote.", variant: "destructive" });
-      return;
-    }
-
-    let newOptimisticScore = currentVoteScore;
-    let dbVoteValue: 1 | -1 = newVoteType === 'up' ? 1 : -1;
-
-    if (userVoteStatus === newVoteType) { 
-      newOptimisticScore += (newVoteType === 'up' ? -1 : 1);
-      setUserVoteStatus(null);
-      const { error } = await supabase
-        .from('politician_votes')
-        .delete()
-        .match({ politician_id: politician.id, user_id: user.id });
-      if (error) {
-        toast({ title: "Error undoing vote", description: error.message, variant: "destructive" });
-        setUserVoteStatus(newVoteType); 
-        // Revert optimistic score on error
-        setCurrentVoteScore(currentVoteScore);
-      } else {
-        toast({ title: "Vote removed" });
-      }
-    } else { 
-      if (userVoteStatus === 'up') newOptimisticScore -= 1; 
-      if (userVoteStatus === 'down') newOptimisticScore += 1; 
-      
-      newOptimisticScore += (newVoteType === 'up' ? 1 : -1);
-      setUserVoteStatus(newVoteType);
-
-      const { error } = await supabase
-        .from('politician_votes')
-        .upsert(
-          { politician_id: politician.id, user_id: user.id, vote_type: dbVoteValue, updated_at: new Date().toISOString() },
-          { onConflict: 'politician_id, user_id' } 
-        );
-      if (error) {
-        toast({ title: "Error casting vote", description: error.message, variant: "destructive" });
-        setUserVoteStatus(userVoteStatus); // Revert to previous button state
-         // Revert optimistic score on error
-        setCurrentVoteScore(currentVoteScore);
-      } else {
-        toast({ title: `Voted ${newVoteType}!`});
-      }
-    }
-    setCurrentVoteScore(newOptimisticScore); 
+    console.log(`Follow toggled for ${politician.name}, new state: ${!isFollowed}`);
+    alert(`Follow action placeholder for ${politician.name}`);
   };
 
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => setIsMounted(true), []);
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}/politicians/${politician.id}`;
+    const shareTitle = politician.name;
+    const shareText = `Check out ${politician.name} on [YourPlatformName]`;
 
-  if (!isMounted) {
-    return (
-      <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
-        <div className="animate-pulse">
-            <div className="h-48 w-full bg-muted" />
-            <CardHeader>
-            <div className="h-6 w-3/4 rounded bg-muted" />
-            <div className="h-4 w-1/2 mt-2 rounded bg-muted" />
-            </CardHeader>
-            <CardContent>
-            <div className="h-4 w-full rounded bg-muted mb-2" />
-            <div className="h-4 w-5/6 rounded bg-muted" />
-            </CardContent>
-            <CardFooter className="justify-between">
-            <div className="h-8 w-20 rounded bg-muted" />
-            <div className="h-8 w-8 rounded-full bg-muted" />
-            </CardFooter>
-        </div>
-      </Card>
-    );
-  }
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl,
+        });
+        console.log('Successfully shared');
+      } catch (error) {
+        console.error('Error sharing:', error);
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          alert('Profile link copied to clipboard!');
+        }).catch(err => console.error('Failed to copy link: ', err));
+      }
+    } else {
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        alert('Profile link copied to clipboard!');
+      }).catch(err => console.error('Failed to copy link: ', err));
+    }
+  };
 
   return (
-    <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col h-full">
-      <Link href={`/politicians/${politician.id}`} className="block">
-        <div className="relative h-48 w-full bg-muted">
-          <Image
-            src={imageUrl || placeholderImage}
-            alt={politician.name}
-            layout="fill"
-            objectFit="cover"
-            data-ai-hint="politician portrait"
-          />
-          {hasCriminalRecord && (
-            <Badge variant="destructive" className="absolute top-2 right-2 text-xs px-1.5 py-0.5">
-              <FileWarning size={12} className="mr-1" /> Record
-            </Badge>
-          )}
-        </div>
+    <Card className="w-full max-w-xs rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 ease-in-out flex flex-col bg-white dark:bg-gray-800">
+      <Link href={`/politicians/${politician.id}`} passHref legacyBehavior>
+        <a className="block group">
+          <CardHeader className="p-0 relative h-48">
+            <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+              <Image
+                src={currentPhotoUrl}
+                alt={`Photo of ${politician.name}`}
+                width={320} 
+                height={192} 
+                className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
+                onError={() => {
+                  setCurrentPhotoUrl('/placeholder-person.png'); 
+                }}
+                priority={false} 
+              />
+            </div>
+          </CardHeader>
+        </a>
       </Link>
-      <CardHeader className="pb-3">
-        <Link href={`/politicians/${politician.id}`}>
-          <CardTitle className="text-xl font-semibold hover:text-primary transition-colors">
-            {politician.name}
-          </CardTitle>
-        </Link>
-        {currentPosition && (
-          <p className="text-sm text-primary flex items-center">
-            <ShieldCheck size={16} className="mr-1.5" />
-            {currentPosition.title}
-          </p>
-        )}
-      </CardHeader>
-      <CardContent className="flex-grow">
-        {currentParty && (
-          <div className="mb-3 flex items-center text-sm text-muted-foreground">
-            {partyLogoUrl ? (
-              <Image src={partyLogoUrl} alt={`${currentParty.name} logo`} width={20} height={20} className="mr-2 rounded-sm object-contain" data-ai-hint="party logo" />
-            ) : (
-              <Users size={16} className="mr-2" />
+      
+      <CardContent className="p-4 flex-grow">
+        <Link href={`/politicians/${politician.id}`} passHref legacyBehavior>
+          <a className="block group">
+            <CardTitle className="text-lg font-bold group-hover:text-primary transition-colors">
+              {politician.name}
+            </CardTitle>
+            {politician.name_nepali && (
+              <p className="text-xs text-muted-foreground mb-2 group-hover:text-primary-focus transition-colors">{politician.name_nepali}</p>
             )}
-            {currentParty.name} {currentParty.abbreviation && `(${currentParty.abbreviation})`}
+          </a>
+        </Link>
+
+        {politician.current_position_title && (
+          <div className="flex items-center text-xs text-muted-foreground mt-2">
+            <Briefcase className="h-3.5 w-3.5 mr-1.5 flex-shrink-0" />
+            <span>{politician.current_position_title}</span>
           </div>
         )}
-        <p className="text-sm text-foreground/80 line-clamp-3 mb-3">
-          {politician.bio || "No biography available."}
-        </p>
-         <div className="flex items-center space-x-2 text-sm">
-            <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleVote('up')}
-                className={cn("p-1 h-auto", userVoteStatus === 'up' && "text-primary bg-primary/10")}
-                aria-pressed={userVoteStatus === 'up'}
-                disabled={!isAuthenticated}
-                title="Upvote"
-            >
-                <ArrowUp className="h-4 w-4" />
-            </Button>
-            <span className="font-semibold min-w-[20px] text-center tabular-nums">{currentVoteScore}</span>
-            <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleVote('down')}
-                className={cn("p-1 h-auto", userVoteStatus === 'down' && "text-destructive bg-destructive/10")}
-                aria-pressed={userVoteStatus === 'down'}
-                disabled={!isAuthenticated}
-                title="Downvote"
-            >
-                <ArrowDown className="h-4 w-4" />
-            </Button>
-        </div>
-      </CardContent>
-      <CardFooter className="flex justify-between items-center border-t pt-4 mt-auto">
-        <Button variant="outline" size="sm" asChild>
-          <Link href={`/politicians/${politician.id}`}>
-            View Profile
-          </Link>
-        </Button>
-        {isAuthenticated && (
-          <Button variant="ghost" size="icon" onClick={handleFollow} title={isFollowed ? "Unfollow" : "Follow"}>
-            <Heart className={`h-5 w-5 ${isFollowed ? 'fill-destructive text-destructive' : 'text-muted-foreground'}`} />
-          </Button>
+        {politician.current_party_name && (
+          <div className="flex items-center text-xs text-muted-foreground mt-1">
+            <Users className="h-3.5 w-3.5 mr-1.5 flex-shrink-0" />
+            <span>{politician.current_party_name}</span>
+          </div>
         )}
+        {politician.has_criminal_record && (
+          <div className="mt-2.5">
+            <Badge variant="destructive" className="text-xs font-normal py-0.5 px-1.5">
+              <ShieldAlert className="h-3 w-3 mr-1" />
+              Criminal Record
+            </Badge>
+          </div>
+        )}
+      </CardContent>
+
+      <CardFooter className="p-3 bg-gray-50 dark:bg-gray-700/50 border-t dark:border-gray-700 flex justify-between items-center">
+        <Button 
+          variant={isFollowed ? "secondary" : "outline"} 
+          size="sm" 
+          onClick={handleFollow}
+          className="text-xs h-8"
+        >
+          <Heart className={`h-3.5 w-3.5 mr-1.5 ${isFollowed ? "fill-red-500 text-red-500" : "text-muted-foreground"}`} />
+          {isFollowed ? 'Following' : 'Follow'}
+        </Button>
+        <Button variant="ghost" size="icon" onClick={handleShare} title="Share Profile" className="h-8 w-8">
+          <Share2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
+        </Button>
       </CardFooter>
     </Card>
   );
-}
+};
+
+export default PoliticianCard;
