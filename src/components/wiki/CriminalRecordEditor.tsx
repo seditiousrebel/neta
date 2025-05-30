@@ -24,7 +24,11 @@ export interface CriminalRecordEditorProps extends EditorProps<CriminalRecord[]>
   // No additional props beyond EditorProps for now
 }
 
-const caseStatusOptions: CriminalRecord['case_status'][] = ['Pending', 'Convicted', 'Acquitted', 'Discharged', ''];
+// Define actual status options excluding the empty string for direct use in SelectItem values
+const ACTUAL_CASE_STATUS_OPTIONS: Exclude<CriminalRecord['case_status'], '' | undefined>[] = ['Pending', 'Convicted', 'Acquitted', 'Discharged'];
+// Sentinel value to represent the "empty string" state within the Select component
+const EMPTY_STATUS_SENTINEL_VALUE = "--EMPTY_STATUS--";
+
 
 export function CriminalRecordEditor({
   value = [],
@@ -45,7 +49,7 @@ export function CriminalRecordEditor({
       case_description: '',
       offense_date: '',
       court_name: '',
-      case_status: '',
+      case_status: '', // Default to empty string, which will map to sentinel or placeholder
       sentence_details: '',
       relevant_laws: '',
     };
@@ -119,7 +123,7 @@ export function CriminalRecordEditor({
                     <Label htmlFor={`offense_date-${record.id}`}>Offense Date (Optional)</Label>
                     <Input
                       id={`offense_date-${record.id}`}
-                      type="date" // Changed to date type for better UX
+                      type="date"
                       value={record.offense_date || ''}
                       onChange={(e) => handleFieldChange(record.id, 'offense_date', e.target.value)}
                       placeholder="YYYY-MM-DD"
@@ -139,16 +143,19 @@ export function CriminalRecordEditor({
                   <div>
                     <Label htmlFor={`case_status-${record.id}`}>Case Status (Optional)</Label>
                     <Select
-                      value={record.case_status || ''}
-                      onValueChange={(statusVal) => handleFieldChange(record.id, 'case_status', statusVal as CriminalRecord['case_status'])}
+                      value={record.case_status === '' ? EMPTY_STATUS_SENTINEL_VALUE : record.case_status || undefined}
+                      onValueChange={(selectedValue) => {
+                        const actualValueToStore = selectedValue === EMPTY_STATUS_SENTINEL_VALUE ? '' : selectedValue;
+                        handleFieldChange(record.id, 'case_status', actualValueToStore as CriminalRecord['case_status']);
+                      }}
                       disabled={disabled}
                     >
                       <SelectTrigger id={`case_status-${record.id}`}>
                         <SelectValue placeholder="Select status" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">(Clear Selection)</SelectItem>
-                        {caseStatusOptions.filter(opt => opt !== '').map(opt => (
+                        <SelectItem value={EMPTY_STATUS_SENTINEL_VALUE}>(Not Specified)</SelectItem>
+                        {ACTUAL_CASE_STATUS_OPTIONS.map(opt => (
                           <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                         ))}
                       </SelectContent>
@@ -199,7 +206,7 @@ export function CriminalRecordEditor({
               // DISPLAY VIEW
               <>
                 <p><strong>Description:</strong> {record.case_description || <span className="text-muted-foreground">N/A</span>}</p>
-                <p><strong>Offense Date:</strong> {record.offense_date ? new Date(record.offense_date + 'T00:00:00').toLocaleDateString() : <span className="text-muted-foreground">N/A</span>}</p> {/* Ensure date is parsed correctly for display */}
+                <p><strong>Offense Date:</strong> {record.offense_date ? new Date(record.offense_date + 'T00:00:00').toLocaleDateString() : <span className="text-muted-foreground">N/A</span>}</p>
                 <p><strong>Court:</strong> {record.court_name || <span className="text-muted-foreground">N/A</span>}</p>
                 <p><strong>Status:</strong> {record.case_status || <span className="text-muted-foreground">N/A</span>}</p>
                 {record.sentence_details && <p><strong>Sentence:</strong> {record.sentence_details}</p>}
