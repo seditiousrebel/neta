@@ -70,10 +70,11 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
     }
     const numericId = Number(politicianId);
 
+    // Removed instagram_profile_url and website_url from this select
     const baseSelect = `
       id, name, name_nepali, is_independent, dob, dob_bs, gender, bio, education,
       political_journey, public_criminal_records, asset_declarations,
-      twitter_handle, facebook_profile_url, website_url,
+      twitter_handle, facebook_profile_url,
       contact_email, contact_phone,
       permanent_address, current_address, province_id, created_at, updated_at,
       photo_asset_id,
@@ -472,11 +473,6 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
         fieldType: 'text',
         politicianId: String(politician.id),
       });
-      // toast({
-      //   title: "Edit Basic Details",
-      //   description: "This is a placeholder. A comprehensive form for editing all basic details would appear here. For now, editing name.",
-      //   variant: "info"
-      // });
   };
 
   const renderHeaderField = (
@@ -490,7 +486,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
     fieldOptions?: Array<{label: string; value: string}>
   ) => {
     if (value === undefined || value === null || String(value).trim() === '') {
-      return null; // Hide field if value is not set
+      return null;
     }
     const displayValue = String(value);
 
@@ -501,13 +497,12 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
         <div className="ml-2 break-words flex-grow">
           <span>{displayValue}</span>
         </div>
-        {/* Individual edit buttons removed as per user request */}
       </div>
     );
   };
 
   const renderSocialLink = (
-    platformKey: keyof Pick<DetailedPolitician, 'twitter_handle' | 'facebook_profile_url' | 'website_url'>, // Removed instagram
+    platformKey: keyof Pick<DetailedPolitician, 'twitter_handle' | 'facebook_profile_url'>, // Removed website_url and instagram
     value?: string | null,
     IconComponent?: React.ElementType,
     platformName?: string
@@ -527,7 +522,6 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
                 <IconComponent className="h-5 w-5" />
             </a>
         )}
-         {/* Individual edit buttons removed */}
       </div>
     );
   };
@@ -572,9 +566,8 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
                 <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-1 sm:mb-0">
                     {politician.name}
                 </h1>
-                {/* Main name edit button removed, now part of "Edit Profile Details" */}
             </div>
-            {user && ( // Main Edit Button
+            {user && (
               <Button variant="outline" size="sm" onClick={openMainProfileEditModal} className="mt-2 sm:mt-0">
                 <Pencil className="h-4 w-4 mr-2" />
                 Edit Profile Details
@@ -629,7 +622,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
           <div className="flex items-center space-x-2">
             {renderSocialLink('twitter_handle', politician.twitter_handle, Twitter, 'Twitter')}
             {renderSocialLink('facebook_profile_url', politician.facebook_profile_url, Facebook, 'Facebook')}
-            {renderSocialLink('website_url', politician.website_url, Globe, 'Website')}
+            {/* Website link rendering removed */}
           </div>
           <div className="flex items-center space-x-2 mt-3 sm:mt-0 sm:ml-4">
             <Button variant={isFollowed ? "default" : "outline"} size="sm" onClick={handleFollow} className="group">
@@ -646,6 +639,4 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
     </header>
   );
 }
-    
-
     
