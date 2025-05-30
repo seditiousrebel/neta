@@ -1,19 +1,18 @@
-
 // src/components/politicians/profile/CriminalRecords.tsx
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'; // Keep if used by parent
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle, Gavel, Info } from 'lucide-react';
 
 export interface CriminalRecordItem {
-  id?: string; // Optional ID if items are managed in a list editor
+  id?: string; 
   case_name?: string;
   case_description?: string;
-  date?: string;
-  status?: 'Pending' | 'Resolved' | 'Dismissed' | 'Appealed' | 'Convicted' | string; // Allow string for flexibility
-  court?: string;
-  details?: string;
-  // Allow any other fields from JSON
+  offense_date?: string; // Changed from 'date' to match editor
+  court_name?: string; // Added to match editor
+  case_status?: 'Pending' | 'Convicted' | 'Acquitted' | 'Discharged' | string; // Matched editor
+  sentence_details?: string; // Added to match editor
+  relevant_laws?: string; // Added to match editor
   [key: string]: any;
 }
 
@@ -24,18 +23,21 @@ interface CriminalRecordsProps {
 const formatDate = (dateString?: string | null): string | null => {
   if (!dateString) return null;
   try {
-    // Check if dateString is just a year
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) { // Basic YYYY-MM-DD check
+      const date = new Date(dateString + "T00:00:00"); // Ensure it's parsed as local date
+      if (isNaN(date.getTime())) return dateString;
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
     if (/^\d{4}$/.test(dateString)) {
       return dateString;
     }
-    // Attempt to parse more complete date strings
     const date = new Date(dateString);
-    if (isNaN(date.getTime())) { // Check if date is invalid
-      return dateString; // Return original if invalid
+    if (isNaN(date.getTime())) { 
+      return dateString; 
     }
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   } catch (e) {
-    return dateString; // Return original string if parsing fails
+    return dateString; 
   }
 };
 
@@ -43,7 +45,7 @@ const getStatusBadgeVariant = (status?: string): 'default' | 'destructive' | 'se
   switch (status?.toLowerCase()) {
     case 'resolved':
     case 'dismissed':
-    case 'acquitted': // Added acquitted as a success-like status
+    case 'acquitted': 
       return 'success';
     case 'convicted':
       return 'destructive';
@@ -71,7 +73,7 @@ const StatusIcon = ({ status }: { status?: string }) => {
     }
 };
 
-const CriminalRecords: React.FC<CriminalRecordsProps> = ({ criminalRecordsData }) => {
+const CriminalRecordsDisplay: React.FC<CriminalRecordsProps> = ({ criminalRecordsData }) => {
   let records: CriminalRecordItem[] = [];
   let parseError = false;
   let rawDataDisplay: string | null = null;
@@ -84,34 +86,31 @@ const CriminalRecords: React.FC<CriminalRecordsProps> = ({ criminalRecordsData }
     try {
       const parsed = JSON.parse(criminalRecordsData);
       if (Array.isArray(parsed)) {
-        records = parsed.filter(item => typeof item === 'object' && item !== null && (item.case_name || item.case_description || item.details || Object.keys(item).length > 0));
+        records = parsed.filter(item => typeof item === 'object' && item !== null && (item.case_name || item.case_description || item.details || item.offense_date || Object.keys(item).length > 0));
       } else if (typeof parsed === 'object' && parsed !== null && Object.keys(parsed).length > 0) {
-        // Handle case where a single record might be stored as an object instead of an array of one
         records = [parsed as CriminalRecordItem];
       } else {
-        // Parsed to something else (e.g. empty object, primitive) or array was empty of meaningful items
-        if (Object.keys(parsed).length === 0 && !Array.isArray(parsed)) { // Empty object
+        if (Object.keys(parsed).length === 0 && !Array.isArray(parsed)) {
              return <p className="text-muted-foreground italic text-sm py-4">No criminal records information provided.</p>;
         }
         parseError = true;
         rawDataDisplay = `Data format not recognized as a list of records: ${criminalRecordsData.substring(0,100)}...`;
       }
-      if (records.length === 0 && !parseError) { // Parsed an array, but it's empty or items are invalid
+      if (records.length === 0 && !parseError) {
           return <p className="text-muted-foreground italic text-sm py-4">No criminal records information provided.</p>;
       }
     } catch (e) {
       console.warn("Failed to parse criminal records JSON, attempting to display as raw text:", e);
-      // If it's not JSON, display the raw string if it's not too long or generic "None" messages
-      if (criminalRecordsData.length < 200) { // Heuristic for short, non-JSON text
+      if (criminalRecordsData.length < 200) { 
           rawDataDisplay = criminalRecordsData;
-          parseError = true; // Treat as parse error for display purposes
+          parseError = true; 
       } else {
           rawDataDisplay = "Criminal records data is present but could not be displayed in structured format.";
           parseError = true;
       }
     }
   } else if (Array.isArray(criminalRecordsData)) {
-    records = criminalRecordsData.filter(item => typeof item === 'object' && item !== null && (item.case_name || item.case_description || item.details || Object.keys(item).length > 0));
+    records = criminalRecordsData.filter(item => typeof item === 'object' && item !== null && (item.case_name || item.case_description || item.details || item.offense_date || Object.keys(item).length > 0));
   }
 
   if (parseError && rawDataDisplay) {
@@ -133,7 +132,7 @@ const CriminalRecords: React.FC<CriminalRecordsProps> = ({ criminalRecordsData }
         <Card key={record.id || index} className="shadow-sm hover:shadow-md transition-shadow duration-200 bg-white dark:bg-gray-800">
           <CardHeader className="pb-2 pt-4">
             <CardTitle className="text-md md:text-lg flex items-center font-semibold">
-              <StatusIcon status={record.status} />
+              <StatusIcon status={record.case_status} />
               {record.case_name || record.case_description || "Case Record"}
             </CardTitle>
             {record.case_name && record.case_description && (
@@ -141,10 +140,12 @@ const CriminalRecords: React.FC<CriminalRecordsProps> = ({ criminalRecordsData }
             )}
           </CardHeader>
           <CardContent className="text-xs md:text-sm space-y-1.5 pt-0 pb-4">
-            {record.date && <p><strong className="text-muted-foreground">Date:</strong> {formatDate(record.date) || <span className="italic">N/A</span>}</p>}
-            {record.status && <p><strong className="text-muted-foreground">Status:</strong> <Badge variant={getStatusBadgeVariant(record.status)} className="text-xs px-1.5 py-0.5">{record.status}</Badge></p>}
-            {record.court && <p><strong className="text-muted-foreground">Court:</strong> {record.court}</p>}
-            {record.details && (
+            {record.offense_date && <p><strong className="text-muted-foreground">Offense Date:</strong> {formatDate(record.offense_date) || <span className="italic">N/A</span>}</p>}
+            {record.case_status && <p><strong className="text-muted-foreground">Status:</strong> <Badge variant={getStatusBadgeVariant(record.case_status)} className="text-xs px-1.5 py-0.5">{record.case_status}</Badge></p>}
+            {record.court_name && <p><strong className="text-muted-foreground">Court:</strong> {record.court_name}</p>}
+            {record.sentence_details && <p><strong className="text-muted-foreground">Sentence:</strong> {record.sentence_details}</p>}
+            {record.relevant_laws && <p><strong className="text-muted-foreground">Laws:</strong> {record.relevant_laws}</p>}
+            {record.details && ( // Assuming 'details' field is still relevant if not directly in editor
               <details className="mt-2 text-xs">
                 <summary className="cursor-pointer text-muted-foreground hover:text-primary font-medium">More Details</summary>
                 <p className="mt-1 whitespace-pre-wrap bg-gray-50 dark:bg-gray-700/50 p-2 rounded border dark:border-gray-600">{record.details}</p>
@@ -157,6 +158,4 @@ const CriminalRecords: React.FC<CriminalRecordsProps> = ({ criminalRecordsData }
   );
 };
 
-export default CriminalRecords;
-
-    
+export default CriminalRecordsDisplay;

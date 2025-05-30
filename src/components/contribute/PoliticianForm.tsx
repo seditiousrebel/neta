@@ -13,10 +13,33 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import PhotoUpload from '@/components/upload/PhotoUpload';
 import { Loader2 } from 'lucide-react';
+import { CriminalRecordEditor, type CriminalRecord } from '@/components/wiki/CriminalRecordEditor';
+import { AssetDeclarationEditor, type AssetDeclaration } from '@/components/wiki/AssetDeclarationEditor';
 
 const LOCAL_STORAGE_KEY_NEW_POLITICIAN = 'newPoliticianFormDraft_v1';
 
 // Zod Schema for validation
+
+const criminalRecordSchema = z.object({
+  id: z.string().uuid().optional(), // ID might not be present initially
+  case_description: z.string().min(1, "Description is required."),
+  offense_date: z.string().optional(), // YYYY-MM-DD
+  court_name: z.string().optional(),
+  case_status: z.enum(['Pending', 'Convicted', 'Acquitted', 'Discharged', '']).optional(),
+  sentence_details: z.string().optional(),
+  relevant_laws: z.string().optional(),
+});
+
+const assetDeclarationSchema = z.object({
+  id: z.string().uuid().optional(),
+  year: z.union([z.number(), z.string()]).pipe(z.coerce.number().int().min(1900).max(new Date().getFullYear() + 5)),
+  description_of_assets: z.string().min(1, "Description is required."),
+  total_value_approx: z.union([z.number(), z.string()]).pipe(z.coerce.number().optional().nullable()),
+  source_of_income: z.string().optional(),
+  remarks: z.string().optional(),
+});
+
+
 const politicianFormSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   name_nepali: z.string().optional(),
@@ -25,10 +48,11 @@ const politicianFormSchema = z.object({
   photo_asset_id: z.string().uuid({message: "Invalid photo asset ID format."}).optional().nullable(),
 
   biography: z.string().optional(),
-  education_details: z.string().optional(),
-  political_journey: z.string().optional(),
-  criminal_records: z.string().optional(),
-  asset_declarations: z.string().optional(),
+  education_details: z.string().optional(), // Keeping as string for Markdown for now, can be enhanced like others if needed
+  political_journey: z.string().optional(), // Keeping as string for Markdown for now
+
+  criminal_records: z.array(criminalRecordSchema).optional().default([]),
+  asset_declarations: z.array(assetDeclarationSchema).optional().default([]),
 
   contact_information: z.object({
     email: z.string().email({ message: "Invalid email address." }).optional().or(z.literal('')),
@@ -65,8 +89,8 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
       biography: '',
       education_details: '',
       political_journey: '',
-      criminal_records: '',
-      asset_declarations: '',
+      criminal_records: [],
+      asset_declarations: [],
       contact_information: { email: '', phone: '', address: '' },
       social_media_handles: { twitter: '', facebook: '', instagram: '' },
       ...defaultValues,
@@ -78,6 +102,9 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
     if (savedDraft) {
       try {
         const draftData = JSON.parse(savedDraft);
+        // Ensure array fields are initialized correctly if missing from draft
+        draftData.criminal_records = draftData.criminal_records || [];
+        draftData.asset_declarations = draftData.asset_declarations || [];
         form.reset(draftData);
         setDraftSaveStatus("Draft loaded from last session.");
       } catch (error) {
@@ -114,13 +141,17 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
 
   const handleFormSubmitWrapper = (data: PoliticianFormData) => {
     onSubmit(data);
+    // Consider clearing draft on successful preview navigation if desired
+    // localStorage.removeItem(LOCAL_STORAGE_KEY_NEW_POLITICIAN);
+    // setDraftSaveStatus("Draft cleared after submission to preview.");
   };
 
   const clearDraftManually = () => {
     localStorage.removeItem(LOCAL_STORAGE_KEY_NEW_POLITICIAN);
     form.reset({
       name: '', name_nepali: '', dob: '', gender: undefined, photo_asset_id: null,
-      biography: '', education_details: '', political_journey: '', criminal_records: '', asset_declarations: '',
+      biography: '', education_details: '', political_journey: '', 
+      criminal_records: [], asset_declarations: [],
       contact_information: { email: '', phone: '', address: '' },
       social_media_handles: { twitter: '', facebook: '', instagram: '' },
       ...defaultValues,
@@ -211,7 +242,7 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
           )}
         />
 
-        <h2 className="text-xl font-semibold border-b pb-2 mt-6">Additional Details</h2>
+        <h2 className="text-xl font-semibold border-b pb-2 mt-6">Education & Political Journey</h2>
         <div className="space-y-6">
           <FormField control={form.control} name="education_details" render={({ field }) => (
               <FormItem>
@@ -231,25 +262,50 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
               </FormItem>
             )}
           />
-          <FormField control={form.control} name="criminal_records" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Criminal Records (if any)</FormLabel>
-                <FormControl><Textarea placeholder='Example using Markdown:\n**Case: Alleged Irregularity (2070)**\n- Status: Pending Investigation\n- Details: Accusations related to...\n\nOr simply type: `None`' {...field} rows={3} /></FormControl>
-                <FormDescription>Use Markdown for formatting. Describe any cases, their status, and relevant dates or outcomes. If none, state "None".</FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField control={form.control} name="asset_declarations" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Asset Declarations</FormLabel>
-                <FormControl><Textarea placeholder="Example using Markdown:\n**Year 2078**\n- House in KTM, Value: Approx. 1 Crore NRs\n- Land in Pokhara, Value: Approx. 50 Lakhs NRs\n\n**Year 2077**\n- Bank Balance: Approx. 20 Lakhs NRs" {...field} rows={4} /></FormControl>
-                <FormDescription>Use Markdown for formatting. List assets, their approximate value, and relevant years. Provide as much detail as publicly available and verifiable.</FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
         </div>
+        
+        <h2 className="text-xl font-semibold border-b pb-2 mt-6">Criminal Records (if any)</h2>
+        <FormField
+            control={form.control}
+            name="criminal_records"
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Manage Criminal Records</FormLabel>
+                    <FormControl>
+                        <CriminalRecordEditor
+                            id="criminal-records-form-editor"
+                            value={field.value || []}
+                            onChange={field.onChange}
+                            disabled={isLoading}
+                        />
+                    </FormControl>
+                    <FormDescription>Add, edit, or remove criminal records.</FormDescription>
+                    <FormMessage />
+                </FormItem>
+            )}
+        />
+
+        <h2 className="text-xl font-semibold border-b pb-2 mt-6">Asset Declarations</h2>
+         <FormField
+            control={form.control}
+            name="asset_declarations"
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Manage Asset Declarations</FormLabel>
+                    <FormControl>
+                        <AssetDeclarationEditor
+                            id="asset-declarations-form-editor"
+                            value={field.value || []}
+                            onChange={field.onChange}
+                            disabled={isLoading}
+                        />
+                    </FormControl>
+                    <FormDescription>Add, edit, or remove yearly asset declarations.</FormDescription>
+                    <FormMessage />
+                </FormItem>
+            )}
+        />
+
 
         <h2 className="text-xl font-semibold border-b pb-2 mt-6">Contact Information</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

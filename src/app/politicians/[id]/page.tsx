@@ -13,20 +13,20 @@ import {
   User, Cake, VenetianMask, Info, Twitter, Facebook, Instagram, Globe, Mail, Phone, MapPin,
   Heart, Share2, AlertTriangle, Landmark, Building, Pencil, Library
 } from 'lucide-react';
-import type { PoliticianFormData } from '@/components/contribute/PoliticianForm'; // Assuming this type is still relevant for edits
+import type { PoliticianFormData } from '@/components/contribute/PoliticianForm'; 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Overview from '@/components/politicians/profile/Overview';
 import CareerTimeline from '@/components/politicians/profile/CareerTimeline';
-import CriminalRecords from '@/components/politicians/profile/CriminalRecords';
+import CriminalRecordsDisplay from '@/components/politicians/profile/CriminalRecords'; // Renamed for clarity
 import { EditModal, EditModalProps, FieldType as ModalFieldType, EditorProps } from '@/components/wiki/EditModal';
 import { EditButton } from '@/components/wiki/EditButton';
 import { RichTextEditor } from '@/components/wiki/RichTextEditor';
 import { DateEditor, DateEditorProps } from '@/components/wiki/DateEditor';
-import { CriminalRecordEditor, CriminalRecordEditorProps } from '@/components/wiki/CriminalRecordEditor';
-import { AssetDeclarationEditor, AssetDeclarationEditorProps } from '@/components/wiki/AssetDeclarationEditor';
-import AssetDeclarations from '@/components/politicians/profile/AssetDeclarations';
+import { CriminalRecordEditor, CriminalRecordEditorProps, type CriminalRecord } from '@/components/wiki/CriminalRecordEditor';
+import { AssetDeclarationEditor, AssetDeclarationEditorProps, type AssetDeclaration } from '@/components/wiki/AssetDeclarationEditor';
+import AssetDeclarationsDisplay from '@/components/politicians/profile/AssetDeclarations'; // Renamed for clarity
 import EditHistory from '@/components/politicians/profile/EditHistory';
 import type { DetailedPolitician, PoliticianPartyMembership, PoliticianParty, PoliticianMediaAsset, ProvinceFilterOption, CareerJourneyEntry } from '@/types/entities';
 import { getProvinceFilterOptions } from '@/lib/supabase/data'; // For province select in modal
@@ -39,12 +39,12 @@ interface ModalContentData {
   editorComponent?: React.ComponentType<EditorProps<any>>;
   editorProps?: Record<string, any>;
   politicianId: string;
-  fieldOptions?: Array<{ label: string; value: string }>; // Changed from string[] to object array for select
+  fieldOptions?: Array<{ label: string; value: string }>; 
 }
 
 
 async function getPoliticianDetails(politicianId: string): Promise<DetailedPolitician | null> {
-  const supabase = createSupabaseBrowserClient(); // Using browser client as this function is called in a client component context
+  const supabase = createSupabaseBrowserClient(); 
   if (!politicianId || isNaN(Number(politicianId))) {
     console.error('Invalid politician ID:', politicianId);
     return null;
@@ -74,8 +74,7 @@ async function getPoliticianDetails(politicianId: string): Promise<DetailedPolit
     promises!politician_id ( * ),
     provinces (id, name)
   `;
-    // politician_career_entries!politician_id ( * ) -- temporarily removed due to potential schema issues
-
+  
   try {
     let { data, error } = await supabase
       .from('politicians')
@@ -89,7 +88,7 @@ async function getPoliticianDetails(politicianId: string): Promise<DetailedPolit
         console.warn("Fallback: Retrying query without 'politician_career_entries' due to relationship error.");
         const fallbackQuery = await supabase
           .from('politicians')
-          .select(baseSelect) // Use baseSelect without career_entries here
+          .select(baseSelect) 
           .eq('id', numericId)
           .maybeSingle<Omit<DetailedPolitician, 'politician_career_entries'>>();
 
@@ -98,7 +97,6 @@ async function getPoliticianDetails(politicianId: string): Promise<DetailedPolit
           return null;
         }
         if (fallbackQuery.data) {
-          // Attempt to fetch career entries separately
           const { data: careerData, error: careerError } = await supabase
             .from('politician_career_entries')
             .select('*')
@@ -106,14 +104,13 @@ async function getPoliticianDetails(politicianId: string): Promise<DetailedPolit
 
           if (careerError) {
             console.warn('Failed to fetch career entries in fallback:', careerError.message);
-            // Return main data even if career entries fail
             return { ...fallbackQuery.data, politician_career_entries: [] } as DetailedPolitician;
           }
           return { ...fallbackQuery.data, politician_career_entries: careerData || [] } as DetailedPolitician;
         }
-        return null; // Fallback data also not found
+        return null; 
       }
-      return null; // Other initial error
+      return null; 
     }
     return data;
   } catch (e: any) {
@@ -122,7 +119,6 @@ async function getPoliticianDetails(politicianId: string): Promise<DetailedPolit
   }
 }
 
-// PoliticianDetailPage - Main Component
 export default function PoliticianDetailPage({ params: serverParamsProp }: { params: { id: string } }) {
   const resolvedServerParams = use(serverParamsProp);
   const id = resolvedServerParams.id;
@@ -191,7 +187,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
 
 
   const openModal = (data: ModalContentData) => {
-    if (!user && data.fieldName !== 'login_prompt') { // Allow login prompt to always open
+    if (!user && data.fieldName !== 'login_prompt') { 
       toast({
         title: "Authentication Required",
         description: "You need to be logged in to propose an edit.",
@@ -207,11 +203,28 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
       });
       return;
     }
-    // For province, ensure options are passed correctly
+    
     if (data.fieldName === 'province_id') {
         data.fieldOptions = provinceOptions;
     }
-    setModalData({ ...data, politicianId: String(politician?.id || '') });
+
+    // For criminal records and asset declarations, ensure currentValue is an array
+    let currentValueForModal = data.currentValue;
+    if (data.fieldName === 'public_criminal_records' || data.fieldName === 'asset_declarations') {
+        if (typeof data.currentValue === 'string') {
+            try {
+                currentValueForModal = JSON.parse(data.currentValue || '[]');
+            } catch (e) {
+                console.warn(`Failed to parse ${data.fieldName} as JSON, defaulting to empty array for modal:`, data.currentValue);
+                currentValueForModal = [];
+            }
+        } else if (!Array.isArray(data.currentValue)) {
+            currentValueForModal = [];
+        }
+    }
+
+
+    setModalData({ ...data, currentValue: currentValueForModal, politicianId: String(politician?.id || '') });
     setIsModalOpen(true);
   };
 
@@ -232,7 +245,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
         politician={politician}
         photoUrl={photoUrl}
         onOpenModal={openModal}
-        provinceOptions={provinceOptions} // Pass province options here for direct use
+        provinceOptions={provinceOptions} 
       />
 
         <div className="mt-10">
@@ -249,7 +262,6 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
             <TabsContent value="overview">
               <Card className="shadow-sm">
                 <CardHeader>
-                  {/* Edit buttons for bio/education moved into Overview component */}
                   <CardTitle>Overview</CardTitle>
                   <CardDescription>A summary including biography, education, and current political engagement.</CardDescription>
                 </CardHeader>
@@ -258,8 +270,8 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                     politician={politician}
                     currentPositionData={politician.politician_positions?.find(p => p.is_current)}
                     currentPartyData={politician.party_memberships?.find(pm => pm.is_active)}
-                    onOpenModal={openModal} // Pass onOpenModal
-                    politicianId={String(politician.id)} // Pass politicianId
+                    onOpenModal={openModal} 
+                    politicianId={String(politician.id)} 
                   />
                 </CardContent>
               </Card>
@@ -273,7 +285,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                         onClick={() => openModal({
                             fieldName: 'political_journey', 
                             fieldLabel: 'Political Journey / Career Entries',
-                            currentValue: politician.political_journey || '', // Pass string or parsed array
+                            currentValue: politician.political_journey || '', 
                             fieldType: 'textarea', 
                             editorProps: { placeholder: 'Enter political journey, ideally as JSON array of objects or structured text.', rows: 10},
                             politicianId: String(politician.id),
@@ -298,7 +310,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                        onClick={() => openModal({
                             fieldName: 'public_criminal_records',
                             fieldLabel: 'Criminal Records',
-                            currentValue: politician.public_criminal_records || [],
+                            currentValue: politician.public_criminal_records, // Will be parsed by openModal
                             fieldType: 'custom',
                             editorComponent: CriminalRecordEditor,
                             editorProps: { /* if any specific props are needed */ },
@@ -308,7 +320,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                     />
                 </CardHeader>
                 <CardContent className="pt-6">
-                  <CriminalRecords criminalRecordsData={politician.public_criminal_records} />
+                  <CriminalRecordsDisplay criminalRecordsData={politician.public_criminal_records} />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -324,7 +336,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                        onClick={() => openModal({
                             fieldName: 'asset_declarations',
                             fieldLabel: 'Asset Declarations',
-                            currentValue: politician.asset_declarations || [],
+                            currentValue: politician.asset_declarations, // Will be parsed by openModal
                             fieldType: 'custom',
                             editorComponent: AssetDeclarationEditor,
                             editorProps: { /* if any specific props are needed */ },
@@ -334,7 +346,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                     />
                 </CardHeader>
                 <CardContent className="pt-6">
-                  <AssetDeclarations assetDeclarationsData={politician.asset_declarations} />
+                  <AssetDeclarationsDisplay assetDeclarationsData={politician.asset_declarations} />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -363,7 +375,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
         fieldType={modalData.fieldType as ModalFieldType}
         editorComponent={modalData.editorComponent}
         editorProps={modalData.editorProps}
-        fieldOptions={modalData.fieldOptions} // Pass options here
+        fieldOptions={modalData.fieldOptions} 
         isAdmin={user?.role === 'Admin'}
       />
     </>
@@ -451,11 +463,8 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
             description: "You need to be logged in to propose an edit.",
             variant: "destructive",
           });
-          // Optionally, you could trigger a login modal here or redirect
-          // For now, just showing a toast.
           return;
       }
-      // Open modal to edit the 'name' as a placeholder for a multi-field edit
       onOpenModal({
         fieldName: 'name', 
         fieldLabel: 'Politician Name (English)',
@@ -470,18 +479,17 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
       });
   };
 
-  // Helper to render fields in the header, conditionally hiding them if no value
   const renderHeaderField = (
     label: string,
     value?: string | number | null,
     icon?: React.ReactNode,
-    fieldName?: keyof DetailedPolitician, // For EditButton
+    fieldName?: keyof DetailedPolitician, 
     fieldType: ModalFieldType = 'text',
     editorComponent?: React.ComponentType<EditorProps<any>>,
     editorProps?: Record<string, any>
   ) => {
     if (value === undefined || value === null || String(value).trim() === '') {
-      return null; // Don't render if value is empty
+      return null; 
     }
     const displayValue = String(value);
 
@@ -539,7 +547,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
                 fieldType: 'url',
                 politicianId: String(politician.id),
             })}
-            className="ml-1" // Adjusted margin
+            className="ml-1" 
         />
       </div>
     );
@@ -585,10 +593,9 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
                 <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-1 sm:mb-0">
                     {politician.name}
                 </h1>
-                {/* EditButton for politician.name is now part of "Edit Profile Details" */}
             </div>
             <Button variant="outline" size="sm" onClick={openMainProfileEditModal} className="mt-2 sm:mt-0">
-              <Pencil className="h-4 w-4 mr-2" /> {/* This ensures only one icon is rendered here */}
+              <Pencil className="h-4 w-4 mr-2" /> 
               Edit Profile Details
             </Button>
         </div>
@@ -638,7 +645,6 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
           <div className="flex items-center space-x-2">
             {renderSocialLink('twitter_handle', politician.twitter_handle, Twitter, 'Twitter')}
             {renderSocialLink('facebook_profile_url', politician.facebook_profile_url, Facebook, 'Facebook')}
-            {/* Add Instagram and Website similarly if those fields exist and are fetched */}
           </div>
           <div className="flex items-center space-x-2 mt-3 sm:mt-0 sm:ml-4">
             <Button variant={isFollowed ? "default" : "outline"} size="sm" onClick={handleFollow} className="group">
