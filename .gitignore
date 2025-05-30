@@ -40,3 +40,4 @@ drizzle/*
 # IDX
 .idx/*
 .idx
+/context_backup
