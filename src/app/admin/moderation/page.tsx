@@ -7,6 +7,7 @@ import { Edit, ShieldAlert, MessageSquare, CheckCircle, XCircle, UserCircle } fr
 import { getPendingEdits } from "@/lib/supabase/admin";
 import type { AdminPendingEdit } from "@/types/entities";
 import { Badge } from "@/components/ui/badge";
+import { ViewEditDetails } from "@/components/admin/moderation/ViewEditDetails"; // New import
 
 export default async function ModerationPage() {
   // For now, fetch the first page of pending edits
@@ -78,14 +79,12 @@ export default async function ModerationPage() {
                         </TableCell>
                         <TableCell>{formatDate(edit.created_at)}</TableCell>
                         <TableCell className="text-right space-x-2">
+                          <ViewEditDetails edit={edit} /> {/* Use the new component here */}
                           {/* Placeholder actions - implement with server actions */}
-                          <Button variant="outline" size="sm" title="View Details & Diff (Not Implemented)">
-                            View
-                          </Button>
-                          <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700 hover:bg-green-100" title="Approve (Not Implemented)">
+                          <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700 hover:bg-green-100" title="Approve (Not Implemented)" disabled>
                             <CheckCircle className="h-5 w-5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-100" title="Deny (Not Implemented)">
+                          <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-100" title="Deny (Not Implemented)" disabled>
                             <XCircle className="h-5 w-5" />
                           </Button>
                         </TableCell>
