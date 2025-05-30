@@ -111,12 +111,108 @@ export async function approvePoliticianAction(
   }
 }
 
+export interface DirectUpdateReturnType {
+  success: boolean;
+  data?: any; // Could be the updated politician record or the revision record
+  error?: string; // Error message string
+  message?: string; // User-friendly success/error message
+}
+
+export async function updatePoliticianDirectly(
+  politicianId: string,
+  fieldName: string,
+  newValue: any,
+  adminId: string, // ID of the admin making the edit
+  changeReason?: string // Optional change reason from admin
+): Promise<DirectUpdateReturnType> {
+  const supabase = createSupabaseServerClient();
+
+  try {
+    // 1. Update the politicians table
+    const updateObject = { 
+      [fieldName]: newValue, 
+      updated_at: new Date().toISOString(),
+      // last_edited_by: adminId, // Optional: if you have such a column
+    };
+
+    const { data: updatedPolitician, error: updateError } = await supabase
+      .from('politicians')
+      .update(updateObject)
+      .eq('id', politicianId)
+      .select() // Select the updated record to confirm and potentially use in revision
+      .single();
+
+    if (updateError) {
+      console.error(`Error updating politician ${politicianId}:`, updateError);
+      return { 
+        success: false, 
+        error: updateError.message, 
+        message: `Failed to update politician data for field ${fieldName}.` 
+      };
+    }
+
+    if (!updatedPolitician) {
+      console.error(`Politician ${politicianId} not found after update.`);
+      return { 
+        success: false, 
+        error: 'Politician not found after update.', 
+        message: 'Failed to retrieve politician data after update.' 
+      };
+    }
+
+    // 2. Create an entity_revisions entry
+    const revisionData = {
+      entity_type: 'Politician',
+      entity_id: politicianId, // Ensure this matches the type (string UUID)
+      data: { [fieldName]: newValue }, // Store the change that was made
+      // Alternatively, store the full updatedPolitician record or a snapshot:
+      // data: updatedPolitician, 
+      submitter_id: adminId, // Admin is both submitter
+      approver_id: adminId,  // and approver in this direct update scenario
+      approved_at: new Date().toISOString(),
+      edit_id: null, // No pending_edit record for direct admin edits
+      change_reason: changeReason || "Admin direct update.", // Record the admin's reason if provided
+    };
+
+    const { error: revisionError } = await supabase
+      .from('entity_revisions')
+      .insert(revisionData);
+
+    if (revisionError) {
+      // Log this error but don't necessarily fail the whole operation if politician update succeeded.
+      // This could be a non-critical error depending on policy.
+      console.warn(`Error creating entity revision for politician ${politicianId} after direct admin update:`, revisionError);
+      // Optionally, you could add a partial success message here.
+    }
+
+    // 3. Revalidate paths
+    revalidatePath(`/politicians`);
+    revalidatePath(`/politicians/${politicianId}`);
+    // If you have an admin dashboard or audit log page, revalidate it too.
+    // revalidatePath('/admin/audit-log');
+
+    return { 
+      success: true, 
+      data: updatedPolitician, 
+      message: `Politician field '${fieldName}' updated successfully by admin.` 
+    };
+
+  } catch (e: any) {
+    console.error(`Unexpected error in updatePoliticianDirectly for ${politicianId}:`, e);
+    return { 
+      success: false, 
+      error: e.message || 'An unexpected error occurred.', 
+      message: 'An unexpected error occurred during the direct update.' 
+    };
+  }
+}
+
 // Define ReturnType for submitPoliticianEdit
 export interface SubmitEditReturnType {
   success: boolean;
-  data?: any; // Consider using a more specific type if the structure of the inserted record is known
-  error?: any; // Consider using a specific error type
   message?: string;
+  error?: string; // Simplified error to string message
+  editId?: number | string; // ID of the created pending_edit record
 }
 
 export async function submitPoliticianEdit(
@@ -155,9 +251,18 @@ export async function submitPoliticianEdit(
       console.error('Error inserting pending edit:', error);
       return { 
         success: false, 
-        error: { message: error.message, details: error.details, hint: error.hint, code: error.code },
+        error: error.message, // Simplified error message
         message: 'Failed to submit edit proposal.' 
       };
+    }
+
+    if (!data || !data.id) {
+      console.error('Pending edit created but ID not returned.');
+      return {
+        success: false,
+        error: 'Failed to retrieve ID for the created pending edit.',
+        message: 'Edit submission may have partially succeeded but ID is missing.'
+      }
     }
 
     // Revalidate relevant paths if needed, e.g., a user's dashboard of pending edits
@@ -166,13 +271,17 @@ export async function submitPoliticianEdit(
     // revalidatePath(`/politicians/${politicianId}`);
 
 
-    return { success: true, data, message: 'Edit proposal submitted successfully.' };
+    return { 
+      success: true, 
+      editId: data.id, // Return the ID of the new pending_edit
+      message: 'Edit proposal submitted successfully.' 
+    };
 
   } catch (e: any) {
     console.error('Unexpected error in submitPoliticianEdit:', e);
     return { 
       success: false, 
-      error: { message: e.message || 'An unexpected error occurred.' },
+      error: e.message || 'An unexpected error occurred.',
       message: 'An unexpected error occurred while submitting the edit proposal.'
     };
   }

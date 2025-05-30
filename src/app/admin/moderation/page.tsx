@@ -7,11 +7,15 @@ import { Edit, ShieldAlert, MessageSquare, CheckCircle, XCircle, UserCircle, Use
 import { getPendingEdits } from "@/lib/supabase/admin";
 import type { AdminPendingEdit } from "@/types/entities";
 import { Badge } from "@/components/ui/badge";
-import { ViewEditDetails } from "@/components/admin/moderation/ViewEditDetails";
+// ViewEditDetails will be replaced by PoliticianReview for politician edits
+// import { ViewEditDetails } from "@/components/admin/moderation/ViewEditDetails"; 
+import { PoliticianReview } from "@/components/admin/politicians/PoliticianReview";
 import { denyPendingEditAction, approvePendingEditAction } from "@/lib/actions/moderation.actions"; 
-import { Input } from "@/components/ui/input"; // Added Input
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Added Select
+import { CalendarDays } from "lucide-react"; // For date picker icon (optional)
 
-// Helper function to format date (remains as is)
+// Helper function to format date
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleString();
 };
@@ -41,26 +45,36 @@ export default async function ModerationPage({
   searchParams,
 }: {
   searchParams?: {
-    page?: string; // For general pending edits pagination
-    politicianPage?: string; // For politician edits pagination
-    politicianSearch?: string; // For searching politician edits
+    page?: string; 
+    politicianPage?: string;
+    politicianSearch?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    status?: "Pending" | "Approved" | "Denied" | "";
   };
 }) {
   const currentPage = Number(searchParams?.page) || 1;
   const currentPoliticianPage = Number(searchParams?.politicianPage) || 1;
-  const politicianSearchQuery = searchParams?.politicianSearch || '';
+  const politicianSearchQuery = searchParams?.politicianSearch || "";
+  const dateFrom = searchParams?.dateFrom || "";
+  const dateTo = searchParams?.dateTo || "";
+  const selectedStatus = searchParams?.status || "";
 
-  // Fetch general pending edits
+  // Fetch general pending edits (assuming no new filters for this tab for now)
   const { edits: pendingEdits, count: totalPendingEdits } = await getPendingEdits({ page: currentPage });
 
-  // Fetch politician-specific pending edits
-  const { edits: pendingPoliticianEdits, count: totalPoliticianEdits } = await getPendingEdits({ 
-    page: currentPoliticianPage, 
+  // Fetch politician-specific pending edits with new filters
+  const politicianEditFilters = {
+    page: currentPoliticianPage,
     entityType: 'Politician',
-    // searchQuery: politicianSearchQuery, // Full search implementation is a future step
-  });
+    searchQuery: politicianSearchQuery, // Pass search query
+    dateFrom: dateFrom,
+    dateTo: dateTo,
+    status: selectedStatus,
+  };
+  const { edits: pendingPoliticianEdits, count: totalPoliticianEdits } = await getPendingEdits(politicianEditFilters);
   
-  // Helper function to get proposer info (remains as is)
+  // Helper function to get proposer info
   const getProposerInfo = (edit: AdminPendingEdit) => {
     if (edit.users) {
       return edit.users.full_name || edit.users.email || edit.proposer_id;
@@ -161,22 +175,50 @@ export default async function ModerationPage({
               <CardDescription>Review and approve or deny user-submitted politician profiles.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-2">
-                <form className="w-full sm:max-w-sm">
-                  <Input 
-                    type="search" 
-                    placeholder="Search by politician name..."
-                    name="politicianSearch"
-                    defaultValue={politicianSearchQuery} 
-                  />
-                  {/* Example: <Button type="submit">Search</Button> */}
-                </form>
-                {/* Placeholder for Date Filter Button - functionality to be implemented 
-                <div className="flex space-x-2">
-                  <Button variant="outline">Date Range <CalendarDays className="ml-2 h-4 w-4" /></Button>
+              {/* Filter and Search Form for Politician Edits */}
+              <form method="GET" action="/admin/moderation" className="mb-6 p-4 border rounded-lg bg-muted/40">
+                <TabsList className="hidden"> {/* Hidden TabsList to make sure the form targets the correct tab content */}
+                    <TabsTrigger value="pending-politician-edits" />
+                </TabsList>
+                <input type="hidden" name="tab" value="pending-politician-edits" /> {/* Keep tab active */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                  <div>
+                    <label htmlFor="politicianSearch" className="block text-sm font-medium text-muted-foreground mb-1">Search Name</label>
+                    <Input 
+                      type="search" 
+                      id="politicianSearch"
+                      name="politicianSearch"
+                      placeholder="Enter politician name..."
+                      defaultValue={politicianSearchQuery} 
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="status" className="block text-sm font-medium text-muted-foreground mb-1">Status</label>
+                    <Select name="status" defaultValue={selectedStatus}>
+                      <SelectTrigger id="status">
+                        <SelectValue placeholder="Any Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Any Status</SelectItem>
+                        <SelectItem value="Pending">Pending</SelectItem>
+                        <SelectItem value="Approved">Approved</SelectItem>
+                        <SelectItem value="Denied">Denied</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label htmlFor="dateFrom" className="block text-sm font-medium text-muted-foreground mb-1">Date From</label>
+                    <Input type="date" id="dateFrom" name="dateFrom" defaultValue={dateFrom} />
+                  </div>
+                  <div>
+                    <label htmlFor="dateTo" className="block text-sm font-medium text-muted-foreground mb-1">Date To</label>
+                    <Input type="date" id="dateTo" name="dateTo" defaultValue={dateTo} />
+                  </div>
                 </div>
-                */}
-              </div>
+                <div className="mt-4 flex justify-end">
+                  <Button type="submit" variant="default">Apply Filters</Button>
+                </div>
+              </form>
 
               {pendingPoliticianEdits.length > 0 ? (
                 <Table>
@@ -206,21 +248,10 @@ export default async function ModerationPage({
                           {edit.change_reason || <span className="text-muted-foreground italic">No reason</span>}
                         </TableCell>
                         <TableCell>{formatDate(edit.created_at)}</TableCell>
-                        <TableCell className="text-right space-x-2">
-                          {/* For Politician edits, PoliticianReview will be used in a later step */}
-                          <ViewEditDetails edit={edit} /> 
-                          <form action={approveAction} className="inline-block">
-                            <input type="hidden" name="editId" value={edit.id} />
-                            <Button type="submit" variant="ghost" size="icon" className="text-green-600 hover:text-green-700 hover:bg-green-100" title="Approve">
-                              <CheckCircle className="h-5 w-5" />
-                            </Button>
-                          </form>
-                          <form action={denyAction} className="inline-block">
-                            <input type="hidden" name="editId" value={edit.id} />
-                            <Button type="submit" variant="ghost" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-100" title="Deny">
-                              <XCircle className="h-5 w-5" />
-                            </Button>
-                          </form>
+                        <TableCell className="text-right">
+                          <PoliticianReview edit={edit} adminId="" /> 
+                          {/* adminId is not strictly needed by PoliticianReview if actions derive it, but passing empty for now */}
+                          {/* The approve/deny actions are now within PoliticianReview */}
                         </TableCell>
                       </TableRow>
                     ))}

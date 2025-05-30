@@ -39,21 +39,26 @@ export async function isAdminUser(): Promise<boolean> {
 const ITEMS_PER_PAGE_ADMIN = 15; // Make sure this is defined or imported if used elsewhere
 
 export async function getPendingEdits(
-  options: { 
-    page?: number; 
-    entityType?: string; // Added entityType option
+  options: {
+    page?: number;
+    entityType?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    status?: string; // e.g., "Pending", "Approved", "Denied", or "" for All
+    searchQuery?: string;
   } = {}
 ): Promise<{ edits: AdminPendingEdit[]; count: number | null }> {
   const supabase = createSupabaseServerClient();
   const page = options.page || 1;
-  const entityType = options.entityType; // Get entityType from options
+  const { entityType, dateFrom, dateTo, status, searchQuery } = options;
 
   const from = (page - 1) * ITEMS_PER_PAGE_ADMIN;
   const to = from + ITEMS_PER_PAGE_ADMIN - 1;
 
   let query = supabase
     .from('pending_edits')
-    .select(\`
+    .select(
+      \`
       id,
       entity_type,
       entity_id,
@@ -64,14 +69,40 @@ export async function getPendingEdits(
       status,
       admin_feedback,
       users (id, email, full_name)
-    \`, { count: 'exact' }) // Added { count: 'exact' } for Supabase v2+ count
-    .eq('status', 'Pending')
+    \`,
+      { count: 'exact' }
+    )
     .order('created_at', { ascending: false })
     .range(from, to);
 
-  // Conditionally add entity_type filter
+  // Status Filtering
+  if (status && (status === 'Approved' || status === 'Denied')) {
+    query = query.eq('status', status);
+  } else if (status === 'Pending' || !status) { // Default to 'Pending' if status is "Pending" or not provided
+    query = query.eq('status', 'Pending');
+  }
+  // If status is an empty string "" or "All", no status filter is applied (fetches all statuses).
+
+  // Entity Type Filter
   if (entityType) {
     query = query.eq('entity_type', entityType);
+  }
+
+  // Date Filtering
+  if (dateFrom) {
+    query = query.gte('created_at', dateFrom); // Assumes dateFrom is in ISO format
+  }
+  if (dateTo) {
+    // To include the entire 'dateTo' day, adjust the timestamp to the end of that day
+    const endOfDayDateTo = `${dateTo}T23:59:59.999Z`;
+    query = query.lte('created_at', endOfDayDateTo);
+  }
+
+  // Search Query Filter (only for Politician entity_type and if searchQuery is provided)
+  if (entityType === 'Politician' && searchQuery && searchQuery.trim() !== '') {
+    // This targets the 'name' field within the JSONB 'proposed_data'
+    // Ensure the 'name' field exists and is a string in your proposed_data for politicians
+    query = query.ilike('proposed_data->>name', `%${searchQuery.trim()}%`);
   }
 
   const { data, error, count } = await query;

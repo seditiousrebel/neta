@@ -1,13 +1,20 @@
 "use client"; // Make this a client component
 
 // src/app/politicians/[id]/page.tsx
-import React, { useState, useEffect } from 'react'; // Added useState, useEffect
-import { createSupabaseServerClient } from '@/lib/supabase/server'; // Still needed for initial fetch
-import { getPublicUrlForMediaAsset } from '@/lib/supabase/storage.server.ts';
+import React, { useState, useEffect } from 'react';
+// Use client-side Supabase instance for client-side fetching
+import { supabase } from '@/lib/supabase/client'; 
+import { getPublicUrlForMediaAsset } from '@/lib/uploadUtils';
 import Image from 'next/image';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/components/ui/use-toast';
+import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
-import { User, Cake, VenetianMask, Info, Twitter, Facebook, Instagram, Globe, Mail, Phone, MapPin } from 'lucide-react';
-import { notFound, useParams } from 'next/navigation'; // Added useParams
+import { 
+  User, Cake, VenetianMask, Info, Twitter, Facebook, Instagram, Globe, Mail, Phone, MapPin,
+  Heart, Share2, AlertTriangle // Added new icons
+} from 'lucide-react';
+import { notFound, useParams } from 'next/navigation';
 import type { PoliticianFormData } from '@/components/contribute/PoliticianForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
@@ -23,6 +30,11 @@ import { RichTextEditor } from '@/components/wiki/RichTextEditor';
 import { DateEditor, DateEditorProps } from '@/components/wiki/DateEditor';
 import { CriminalRecordEditor, CriminalRecordEditorProps } from '@/components/wiki/CriminalRecordEditor';
 import { AssetDeclarationEditor, AssetDeclarationEditorProps } from '@/components/wiki/AssetDeclarationEditor';
+
+// Import new components for tabs
+import AssetDeclarations from '@/components/politicians/profile/AssetDeclarations';
+import EditHistory from '@/components/politicians/profile/EditHistory';
+import VotingHistory from '@/components/politicians/detail/VotingHistory';
 
 
 export interface PoliticianProfileData extends PoliticianFormData {
@@ -90,9 +102,14 @@ export default function PoliticianProfilePage({ params: serverParams }: { params
   const clientParams = useParams(); // Use this for client-side access if needed, or stick to serverParams
   const id = serverParams.id || clientParams.id as string;
 
+  const { user } = useAuth(); // Get user from auth context
+  const { toast } = useToast(); // For showing notifications
+  // const router = useRouter(); // Uncomment if redirection to login is implemented
+
   const [politician, setPolitician] = useState<PoliticianProfileData | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFollowed, setIsFollowed] = useState(false); // State for follow button
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState<Partial<ModalContentData>>({});
@@ -104,42 +121,77 @@ export default function PoliticianProfilePage({ params: serverParams }: { params
     // This example will fetch fresh data on mount.
     async function loadData() {
       setIsLoading(true);
-      const supabase = createSupabaseServerClient(); // This needs to be client Supabase instance
-                                                  // For now, let's assume a client-side Supabase client exists or is set up
-                                                  // For simplicity, I'll mock this part of the re-fetch and assume initial data is enough.
-                                                  // Proper re-fetch logic would be needed in a real app.
-      
-      // This is a simplified initial fetch for the client component.
-      // In a real app, you might pass initial data from a server component parent or use SWR/React Query.
-      const { data: fetchedPol, error } = await supabase
+      // Using the imported client-side 'supabase' instance
+      const { data: fetchedPol, error: politicianError } = await supabase
         .from('politicians')
         .select('*')
         .eq('id', id)
         .single();
 
+      if (politicianError) {
+        console.error("Failed to fetch politician data on client:", politicianError.message);
+        // Check for specific error code that indicates "not found" if PGRST116 is standard
+        if (politicianError.code === 'PGRST116') {
+            notFound();
+        } else {
+            // Handle other errors (e.g., show a generic error message to the user)
+            // For now, we'll still call notFound(), but a more user-friendly error page might be better.
+            notFound(); 
+        }
+        setIsLoading(false);
+        return;
+      }
+      
       if (fetchedPol) {
         const typedPol = fetchedPol as PoliticianProfileData;
-        typedPol.id = String(typedPol.id);
+        typedPol.id = String(typedPol.id); // Ensure ID is string
         setPolitician(typedPol);
+
         if (typedPol.photo_asset_id) {
-           // Client-side fetching of public URL (if storage helper allows or via a serverless function)
-           // const publicUrl = await getPublicUrlForMediaAsset(typedPol.photo_asset_id); // This is server-only
-           // For now, let's assume photoUrl is part of initial data or fetched differently.
-           // To simplify, we'll use a placeholder logic for photoUrl on client side for now.
-           // This part needs careful handling of Supabase client/server storage functions.
+          const url = await getPublicUrlForMediaAsset(typedPol.photo_asset_id);
+          setPhotoUrl(url); // url can be null if not found or error, handled by Image onError
+        } else {
+          setPhotoUrl(null); // No asset ID, so no photo
         }
       } else {
-        console.error("Failed to fetch politician data on client:", error?.message);
-        notFound(); // Or handle error state
+         // This case should ideally be caught by politicianError.code === 'PGRST116'
+        console.warn("Politician data not found for id:", id);
+        notFound(); 
       }
       setIsLoading(false);
     }
-    loadData();
+    
+    if (id) { // Ensure id is available before loading
+        loadData();
+    } else {
+        // Handle case where id might not be available immediately (e.g. if clientParams was slow)
+        // Though with serverParams.id, this should usually be present.
+        setIsLoading(false);
+        notFound(); // Or some other error state
+    }
   }, [id]);
 
 
   const openModal = (data: ModalContentData) => {
-    setModalData({ ...data, politicianId: politician!.id });
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "You need to be logged in to propose an edit.",
+        variant: "destructive", // Or "info"
+      });
+      // Optionally: router.push('/auth/login'); // If using redirection
+      return;
+    }
+    // Ensure politician data is loaded before trying to access politician.id
+    if (!politician) {
+        toast({
+            title: "Data Error",
+            description: "Politician data is not yet available. Please try again shortly.",
+            variant: "destructive",
+        });
+        return;
+    }
+    setModalData({ ...data, politicianId: politician.id });
     setIsModalOpen(true);
   };
 
@@ -215,6 +267,51 @@ export default function PoliticianProfilePage({ params: serverParams }: { params
         </a>
     );
   };
+
+  const handleFollow = () => {
+    if (!user) {
+      toast({ title: "Login Required", description: "Please log in to follow politicians.", variant: "info" });
+      return;
+    }
+    setIsFollowed(!isFollowed);
+    toast({ title: isFollowed ? "Unfollowed (Placeholder)" : "Followed (Placeholder)", description: "Follow functionality to be implemented." });
+  };
+
+  const handleShare = async () => {
+    const shareData = {
+      title: politician?.name || "Politician Profile",
+      text: `Check out the profile of ${politician?.name || 'this politician'} on [Your Site Name]!`, // Replace [Your Site Name]
+      url: window.location.href,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        toast({ title: "Shared successfully!" });
+      } else {
+        throw new Error("Web Share API not available."); // Fallback to clipboard
+      }
+    } catch (err) {
+      // Fallback to copying link to clipboard
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        toast({ title: "Link Copied!", description: "Profile link copied to clipboard." });
+      } catch (copyError) {
+        toast({ title: "Share Failed", description: "Could not share or copy link.", variant: "destructive" });
+      }
+    }
+  };
+
+  const handleReportInfo = () => {
+    if (!user) {
+      toast({ title: "Login Required", description: "Please log in to report information.", variant: "info" });
+      return;
+    }
+    toast({
+      title: "Report (Placeholder)",
+      description: "Report functionality to be implemented. Please contact support for urgent issues.",
+      duration: 5000,
+    });
+  };
   
   if (isLoading || !politician) {
     return <div className="container mx-auto p-4 py-8 text-center">Loading politician profile...</div>; // Or a more sophisticated skeleton loader
@@ -285,13 +382,30 @@ export default function PoliticianProfilePage({ params: serverParams }: { params
               {renderField("Phone", getNestedValue(politician, 'contact_information.phone'), <Phone />, false, 'contact_information.phone', 'text')}
               {renderField("Address", getNestedValue(politician, 'contact_information.address'), <MapPin />, false, 'contact_information.address', 'textarea')}
             </div>
-            {(politician.social_media_handles && Object.values(politician.social_media_handles).some(h => h)) && (
-              <div className="mt-5 flex items-center justify-center md:justify-start space-x-1">
-                  {Object.entries(politician.social_media_handles)
-                      .filter(([,url]) => url)
-                      .map(([platform, url]) => renderSocialLink(platform as keyof PoliticianFormData['social_media_handles'], url))}
+            
+            {/* Social Media and Engagement Buttons Container */}
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-center md:justify-start gap-3">
+              {/* Social Media Icons */}
+              <div className="flex items-center space-x-1">
+                {(politician.social_media_handles && Object.values(politician.social_media_handles).some(h => h)) && (
+                    Object.entries(politician.social_media_handles)
+                        .filter(([,url]) => url)
+                        .map(([platform, url]) => renderSocialLink(platform as keyof NonNullable<PoliticianFormData['social_media_handles']>, url))
+                )}
               </div>
-            )}
+
+              {/* Engagement Buttons */}
+              <div className="flex items-center space-x-2 mt-3 sm:mt-0 sm:ml-4">
+                <Button variant={isFollowed ? "default" : "outline"} size="sm" onClick={handleFollow} className="group">
+                  <Heart className={`h-4 w-4 mr-2 transition-colors ${isFollowed ? "fill-destructive text-destructive" : "text-muted-foreground group-hover:text-destructive"}`} />
+                  {isFollowed ? "Following" : "Follow"}
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleShare}>
+                  <Share2 className="h-4 w-4 mr-2 text-muted-foreground" />
+                  Share
+                </Button>
+              </div>
+            </div>
           </div>
         </header>
         
@@ -393,18 +507,32 @@ export default function PoliticianProfilePage({ params: serverParams }: { params
                     })}>Edit Declarations</Button>
                 </CardHeader>
                 <CardContent className="pt-6">
-                    {/* Display component for AssetDeclarations would go here, similar to CriminalRecords */}
-                    {/* For now, just a placeholder or directly use the editor's display if suitable */}
-                    <p className="text-muted-foreground italic py-4">
-                        {politician.asset_declarations && politician.asset_declarations.length > 0 
-                            ? `${politician.asset_declarations.length} declaration(s) on file.` 
-                            : "Asset declaration information will appear here."}
-                    </p>
+                  <AssetDeclarations assetDeclarationsData={politician.asset_declarations} />
                 </CardContent>
               </Card>
             </TabsContent>
-            <TabsContent value="voting_record"><Card className="shadow-sm"><CardHeader><CardTitle>Voting Record</CardTitle></CardHeader><CardContent><p className="text-muted-foreground italic py-4">Voting record details will appear here (if applicable).</p></CardContent></Card></TabsContent>
-            <TabsContent value="edit_history"><Card className="shadow-sm"><CardHeader><CardTitle>Edit History</CardTitle></CardHeader><CardContent><p className="text-muted-foreground italic py-4">History of changes to this profile will appear here.</p></CardContent></Card></TabsContent>
+            <TabsContent value="voting_record">
+              <Card className="shadow-sm">
+                <CardHeader>
+                  <CardTitle>Voting Record</CardTitle>
+                  <CardDescription>Details of votes on legislative bills (if applicable).</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <VotingHistory politicianId={politician.id} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="edit_history">
+              <Card className="shadow-sm">
+                <CardHeader>
+                  <CardTitle>Edit History</CardTitle>
+                  <CardDescription>Chronological list of approved changes to this profile.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <EditHistory politicianId={politician.id} />
+                </CardContent>
+              </Card>
+            </TabsContent>
           </Tabs>
         </div>
       </div>
@@ -417,8 +545,8 @@ export default function PoliticianProfilePage({ params: serverParams }: { params
         currentValue={modalData.currentValue}
         fieldType={modalData.fieldType as ModalFieldType} // Cast because modalData.fieldType is partial
         editorComponent={modalData.editorComponent}
-        // Pass editorProps correctly
-        {...(modalData.editorProps && { editorProps: modalData.editorProps })}
+        editorProps={modalData.editorProps} // Pass through editorProps
+        isAdmin={user?.role === 'Admin'} // Pass isAdmin based on user role
       />
     </>
   );
