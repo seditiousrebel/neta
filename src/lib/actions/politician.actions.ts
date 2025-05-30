@@ -210,9 +210,9 @@ export async function updatePoliticianDirectly(
 // Define ReturnType for submitPoliticianEdit
 export interface SubmitEditReturnType {
   success: boolean;
-  data?: any; // Consider using a more specific type if the structure of the inserted record is known
-  error?: any; // Consider using a specific error type
   message?: string;
+  error?: string; // Simplified error to string message
+  editId?: number | string; // ID of the created pending_edit record
 }
 
 export async function submitPoliticianEdit(
@@ -251,9 +251,18 @@ export async function submitPoliticianEdit(
       console.error('Error inserting pending edit:', error);
       return { 
         success: false, 
-        error: { message: error.message, details: error.details, hint: error.hint, code: error.code },
+        error: error.message, // Simplified error message
         message: 'Failed to submit edit proposal.' 
       };
+    }
+
+    if (!data || !data.id) {
+      console.error('Pending edit created but ID not returned.');
+      return {
+        success: false,
+        error: 'Failed to retrieve ID for the created pending edit.',
+        message: 'Edit submission may have partially succeeded but ID is missing.'
+      }
     }
 
     // Revalidate relevant paths if needed, e.g., a user's dashboard of pending edits
@@ -262,13 +271,17 @@ export async function submitPoliticianEdit(
     // revalidatePath(`/politicians/${politicianId}`);
 
 
-    return { success: true, data, message: 'Edit proposal submitted successfully.' };
+    return { 
+      success: true, 
+      editId: data.id, // Return the ID of the new pending_edit
+      message: 'Edit proposal submitted successfully.' 
+    };
 
   } catch (e: any) {
     console.error('Unexpected error in submitPoliticianEdit:', e);
     return { 
       success: false, 
-      error: { message: e.message || 'An unexpected error occurred.' },
+      error: e.message || 'An unexpected error occurred.',
       message: 'An unexpected error occurred while submitting the edit proposal.'
     };
   }
