@@ -75,6 +75,11 @@ export interface UserContribution {
   status: string; // Database["public"]["Enums"]["edit_status"]
   created_at: string;
   change_reason?: string | null;
+  proposer_id?: string; // Added from pending_edits
+  users?: { // For joined proposer data
+    email?: string | null;
+    full_name?: string | null;
+  } | null;
 }
 
 
@@ -166,7 +171,7 @@ export type PoliticianPartyMembership = {
   end_date?: string | null;
   role_in_party?: string | null;
   is_active?: boolean | null;
-  parties: PoliticianParty | null; // Changed: Allow null for the nested party object
+  parties: PoliticianParty | null;
 };
 
 export type PoliticianPositionTitle = {
@@ -183,14 +188,14 @@ export type PoliticianPosition = {
   end_date?: string | null;
   is_current?: boolean | null;
   description?: string | null;
-  position_titles: PoliticianPositionTitle | null; // Changed: Allow null
+  position_titles: PoliticianPositionTitle | null;
 };
 
 export type PoliticianBillVote = {
   id: number;
   vote: string; // Assuming 'Yea', 'Nay', 'Abstain' from an ENUM
   voted_at: string;
-  legislative_bills: LegislativeBill | null; // Changed: Allow null
+  legislative_bills: LegislativeBill | null;
 };
 
 export type PoliticianPromise = {
@@ -239,5 +244,19 @@ export type DetailedPolitician = {
   bill_votes: PoliticianBillVote[] | null;
   promises: PoliticianPromise[] | null;
   politician_career_entries: PoliticianCareerEntry[] | null;
-  vote_score?: number; // Calculated or from politician_votes summary
+};
+
+// Admin related types
+export type AdminPendingEdit = {
+  id: number;
+  entity_type: string;
+  proposed_data: any; // JSON; consider a more specific type if possible
+  change_reason: string | null;
+  created_at: string;
+  proposer_id: string;
+  users: { // Proposer details
+    id: string;
+    email: string | null;
+    full_name: string | null;
+  } | null;
 };

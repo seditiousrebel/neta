@@ -1,9 +1,28 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Edit, ShieldAlert, MessageSquare } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Edit, ShieldAlert, MessageSquare, CheckCircle, XCircle, UserCircle } from "lucide-react";
+import { getPendingEdits } from "@/lib/supabase/admin";
+import type { AdminPendingEdit } from "@/types/entities";
+import { Badge } from "@/components/ui/badge";
 
-export default function ModerationPage() {
+export default async function ModerationPage() {
+  // For now, fetch the first page of pending edits
+  const { edits: pendingEdits, count: totalPendingEdits } = await getPendingEdits({ page: 1 });
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  const getProposerInfo = (edit: AdminPendingEdit) => {
+    if (edit.users) {
+      return edit.users.full_name || edit.users.email || edit.proposer_id;
+    }
+    return edit.proposer_id;
+  };
+
   return (
     <div className="space-y-8">
       <header className="mb-8">
@@ -14,7 +33,7 @@ export default function ModerationPage() {
       <Tabs defaultValue="pending-edits" className="w-full">
         <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 mb-6">
           <TabsTrigger value="pending-edits">
-            <Edit className="mr-2 h-4 w-4" /> Pending Edits
+            <Edit className="mr-2 h-4 w-4" /> Pending Edits {totalPendingEdits ? `(${totalPendingEdits})` : ''}
           </TabsTrigger>
           <TabsTrigger value="reported-content">
             <ShieldAlert className="mr-2 h-4 w-4" /> Reported Content
@@ -31,22 +50,55 @@ export default function ModerationPage() {
               <CardDescription>Review and approve or deny user-submitted content changes.</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">
-                Pending edits will be listed here. (Functionality to be implemented)
-              </p>
-              {/* Example structure:
-              <ul className="space-y-4">
-                <li className="p-4 border rounded-lg">
-                  <h4 className="font-semibold">Edit to Politician: John Doe - Bio</h4>
-                  <p className="text-sm text-muted-foreground">Submitted by: user@example.com on 2024-07-30</p>
-                  <div className="mt-2 space-x-2">
-                    <Button size="sm" variant="outline">View Diff</Button>
-                    <Button size="sm" variant="default">Approve</Button>
-                    <Button size="sm" variant="destructive">Deny</Button>
-                  </div>
-                </li>
-              </ul>
-              */}
+              {pendingEdits.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Proposer</TableHead>
+                      <TableHead>Entity Type</TableHead>
+                      <TableHead>Change Reason</TableHead>
+                      <TableHead>Submitted</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingEdits.map((edit) => (
+                      <TableRow key={edit.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <UserCircle className="h-5 w-5 text-muted-foreground" />
+                            {getProposerInfo(edit)}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                           <Badge variant="secondary">{edit.entity_type}</Badge>
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate" title={edit.change_reason || undefined}>
+                          {edit.change_reason || <span className="text-muted-foreground italic">No reason provided</span>}
+                        </TableCell>
+                        <TableCell>{formatDate(edit.created_at)}</TableCell>
+                        <TableCell className="text-right space-x-2">
+                          {/* Placeholder actions - implement with server actions */}
+                          <Button variant="outline" size="sm" title="View Details & Diff (Not Implemented)">
+                            View
+                          </Button>
+                          <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700 hover:bg-green-100" title="Approve (Not Implemented)">
+                            <CheckCircle className="h-5 w-5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-100" title="Deny (Not Implemented)">
+                            <XCircle className="h-5 w-5" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-muted-foreground text-center py-8">
+                  No pending edits to review at this time.
+                </p>
+              )}
+              {/* TODO: Add pagination if totalPendingEdits > ITEMS_PER_PAGE_ADMIN */}
             </CardContent>
           </Card>
         </TabsContent>
