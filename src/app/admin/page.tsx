@@ -2,7 +2,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Users, FileText, Edit, BarChart3, AlertTriangle, MessageSquare } from "lucide-react";
+import { Users, FileText, Edit, BarChart3, AlertTriangle, MessageSquare, Library } from "lucide-react"; // Added Library icon
 
 export default function AdminDashboardPage() {
   return (
@@ -12,15 +12,15 @@ export default function AdminDashboardPage() {
         <p className="text-muted-foreground">Overview and quick actions for site management.</p>
       </header>
 
-      <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-4"> {/* Updated to lg:grid-cols-4 */}
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Users</CardTitle>
             <Users className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,234</div>
-            <p className="text-xs text-muted-foreground">+20.1% from last month (placeholder)</p>
+            <div className="text-2xl font-bold">1,234</div> {/* Placeholder */}
+            <p className="text-xs text-muted-foreground">Registered users (placeholder)</p>
           </CardContent>
         </Card>
 
@@ -30,10 +30,10 @@ export default function AdminDashboardPage() {
             <Edit className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">78</div>
+            <div className="text-2xl font-bold">78</div> {/* Placeholder */}
             <p className="text-xs text-muted-foreground">Require review (placeholder)</p>
              <Button variant="outline" size="sm" className="mt-2" asChild>
-                <Link href="/admin/moderation/pending-edits">Review Edits</Link>
+                <Link href="/admin/moderation">Review Edits</Link> {/* Corrected Link */}
             </Button>
           </CardContent>
         </Card>
@@ -44,11 +44,22 @@ export default function AdminDashboardPage() {
             <AlertTriangle className="h-5 w-5 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
+            <div className="text-2xl font-bold">12</div> {/* Placeholder */}
             <p className="text-xs text-muted-foreground">Needs immediate attention (placeholder)</p>
             <Button variant="destructive" size="sm" className="mt-2" asChild>
-                <Link href="/admin/moderation/reports">View Reports</Link>
+                <Link href="/admin/moderation">View Reports</Link> {/* Corrected Link, user will select tab */}
             </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-lg hover:shadow-xl transition-shadow"> {/* New Card */}
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Site Content</CardTitle>
+            <Library className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">5,678</div> {/* Placeholder */}
+            <p className="text-xs text-muted-foreground">Politicians, parties, etc. (placeholder)</p>
           </CardContent>
         </Card>
       </section>
