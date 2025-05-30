@@ -10,6 +10,7 @@ import PaginationControls from '@/components/ui/PaginationControls';
 import { getPartyFilterOptions, getProvinceFilterOptions } from '@/lib/supabase/data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getPublicUrlForMediaAsset } from '@/lib/supabase/storage.server';
+import { Button } from '@/components/ui/button'; // Added missing import
 
 const ITEMS_PER_PAGE = 12;
 
