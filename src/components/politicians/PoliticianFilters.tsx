@@ -9,10 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Search as SearchIcon, X, Landmark, FileWarning } from 'lucide-react';
 import type { PartyFilterOption, ProvinceFilterOption } from '@/types/entities';
+import { Skeleton } from '../ui/skeleton';
 
 interface PoliticianFiltersProps {
-  initialParties: PartyFilterOption[];
-  initialProvinces: ProvinceFilterOption[];
+  parties: PartyFilterOption[];
+  provinces: ProvinceFilterOption[];
+  isLoadingOptions?: boolean;
 }
 
 function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
@@ -27,7 +29,7 @@ function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
   return debounced as (...args: Parameters<F>) => ReturnType<F>;
 }
 
-export default function PoliticianFilters({ initialParties, initialProvinces }: PoliticianFiltersProps) {
+export default function PoliticianFilters({ parties = [], provinces = [], isLoadingOptions = false }: PoliticianFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -59,7 +61,7 @@ export default function PoliticianFilters({ initialParties, initialProvinces }: 
   
   const debouncedSearchUpdate = useCallback(debounce((term: string) => {
     updateUrlParams({ q: term || null });
-  }, 500), [pathname, createQueryString, updateUrlParams]);
+  }, 500), [pathname, createQueryString]); // Removed updateUrlParams from dependencies as createQueryString depends on searchParams which is stable
 
 
   useEffect(() => {
@@ -100,6 +102,31 @@ export default function PoliticianFilters({ initialParties, initialProvinces }: 
   
   const hasActiveFilters = !!searchTerm || !!selectedParty || !!selectedProvince || selectedCriminalRecord !== 'any';
 
+  if (isLoadingOptions) {
+    return (
+      <div className="space-y-6 p-4 md:p-6 bg-card border rounded-lg shadow mb-8">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 items-end">
+          <div className="space-y-1.5">
+            <Skeleton className="h-5 w-3/4" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+           <div className="space-y-1.5">
+            <Skeleton className="h-5 w-3/4" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+           <div className="space-y-1.5">
+            <Skeleton className="h-5 w-3/4" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+           <div className="space-y-1.5">
+            <Skeleton className="h-5 w-3/4" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 p-4 md:p-6 bg-card border rounded-lg shadow mb-8">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 items-end">
@@ -126,7 +153,7 @@ export default function PoliticianFilters({ initialParties, initialProvinces }: 
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Parties</SelectItem>
-              {initialParties.map((party) => (
+              {parties.map((party) => (
                 <SelectItem key={party.id} value={party.id}>
                   {party.name}
                 </SelectItem>
@@ -144,7 +171,7 @@ export default function PoliticianFilters({ initialParties, initialProvinces }: 
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Provinces</SelectItem>
-              {initialProvinces.map((province) => (
+              {provinces.map((province) => (
                 <SelectItem key={province.id} value={province.id}>
                   {province.name}
                 </SelectItem>

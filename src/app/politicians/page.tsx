@@ -4,7 +4,7 @@
 
 import React, { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation'; // For redirecting to login
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import type { PoliticianSummary, PartyFilterOption, ProvinceFilterOption } from '@/types/entities';
 import PoliticianFilters from '@/components/politicians/PoliticianFilters';
@@ -18,41 +18,33 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import PoliticianForm, { type PoliticianFormData } from '@/components/contribute/PoliticianForm';
 import { submitNewPoliticianContribution } from '@/lib/supabase/contributions';
 import { useAuth } from '@/contexts/auth-context';
-// Initial data fetching helpers are kept for context if this page were to receive server props,
-// but primary data loading for filtering/pagination is client-side.
-import { createSupabaseServerClient } from '@/lib/supabase/server'; 
-import { getPublicUrlForMediaAsset as getPublicUrlServer } from '@/lib/supabase/storage.server'; 
-import { getPartyFilterOptions, getProvinceFilterOptions } from '@/lib/supabase/data';
-
+import { getPartyFilterOptions, getProvinceFilterOptions } from '@/lib/supabase/data'; // Server functions
 
 const ITEMS_PER_PAGE = 12;
 
-// Props for the page component, can be fetched on the server initially
+// Props for the page component
 interface PoliticiansPageProps {
-  initialPoliticians: PoliticianSummary[];
-  initialTotalCount: number | null;
-  initialParties: PartyFilterOption[];
-  initialProvinces: ProvinceFilterOption[];
-  currentSearchParams: {
-    q?: string;
-    page?: string;
-    partyId?: string;
-    provinceId?: string;
-    has_criminal_record?: 'yes' | 'no' | 'any' | string;
-    view?: 'grid' | 'list';
-  };
+  // initialPoliticians and initialTotalCount are still relevant if initial data is fetched server-side
+  // for the first page load, before client-side filtering/pagination takes over.
+  // However, if this page is purely client-rendered for the list, these might come from usePoliticians hook directly.
+  // For now, assume initialPoliticians can be passed if pre-rendered on server.
+  initialPoliticians?: PoliticianSummary[];
+  initialTotalCount?: number | null;
+  // currentSearchParams can be derived client-side using useSearchParams hook
 }
 
 // This is the client component part
-export default function PoliticiansPage({
-  initialPoliticians,
-  initialTotalCount,
-  initialParties,
-  initialProvinces,
-  currentSearchParams,
+export default function PoliticiansPageClient({
+  initialPoliticians = [], // Default to empty array
+  initialTotalCount = 0,  // Default to 0
 }: PoliticiansPageProps) {
   const router = useRouter();
+  const currentSearchParamsHook = useSearchParams(); // Use hook for search params
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+
+  const [partyOptions, setPartyOptions] = useState<PartyFilterOption[]>([]);
+  const [provinceOptions, setProvinceOptions] = useState<ProvinceFilterOption[]>([]);
+  const [isLoadingFilterOptions, setIsLoadingFilterOptions] = useState(true);
 
   const [isContributeModalOpen, setIsContributeModalOpen] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
@@ -60,7 +52,38 @@ export default function PoliticiansPage({
   const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [submissionMessage, setSubmissionMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    async function fetchFilterOptions() {
+      setIsLoadingFilterOptions(true);
+      try {
+        const [parties, provinces] = await Promise.all([
+          getPartyFilterOptions(),
+          getProvinceFilterOptions()
+        ]);
+        setPartyOptions(parties);
+        setProvinceOptions(provinces);
+      } catch (error) {
+        console.error("Failed to fetch filter options:", error);
+        // Optionally set an error state here to inform the user
+      } finally {
+        setIsLoadingFilterOptions(false);
+      }
+    }
+    fetchFilterOptions();
+  }, []);
+
+  // Derive currentSearchParams from the hook
+  const currentSearchParams = {
+    q: currentSearchParamsHook.get('q') || undefined,
+    page: currentSearchParamsHook.get('page') || undefined,
+    partyId: currentSearchParamsHook.get('partyId') || undefined,
+    provinceId: currentSearchParamsHook.get('provinceId') || undefined,
+    has_criminal_record: currentSearchParamsHook.get('has_criminal_record') || 'any',
+    view: (currentSearchParamsHook.get('view') as 'grid' | 'list' | undefined) || undefined,
+  };
+
   const currentPage = Number(currentSearchParams?.page) || 1;
+  // totalPages calculation now depends on how totalCount is managed (passed or from usePoliticians hook)
   const totalPages = initialTotalCount !== null ? Math.ceil(initialTotalCount / ITEMS_PER_PAGE) : 0;
 
   const paramsForPagination = new URLSearchParams();
@@ -119,6 +142,8 @@ export default function PoliticiansPage({
       setSubmissionStatus('success');
       setSubmissionMessage(`Contribution submitted successfully! Your Edit ID is ${editId}. It will be reviewed by an admin.`);
       setIsPreviewing(false); 
+      // Consider revalidating or refetching the politicians list here if using TanStack Query
+      // router.refresh(); // Or use TanStack Query's invalidateQueries
     } catch (err: any) {
       setSubmissionStatus('error');
       setSubmissionMessage(err.message || "An unexpected error occurred.");
@@ -155,13 +180,14 @@ export default function PoliticiansPage({
       </div>
 
       <Suspense fallback={<Skeleton className="h-24 w-full rounded-lg mb-6" />}>
-        <PoliticianFilters initialParties={initialParties} initialProvinces={initialProvinces} />
+        <PoliticianFilters parties={partyOptions} provinces={provinceOptions} isLoadingOptions={isLoadingFilterOptions} />
       </Suspense>
       
-      {isInitialLoadAndNoPoliticians ? (
+      {isInitialLoadAndNoPoliticians && !isLoadingFilterOptions ? ( // Also check isLoadingFilterOptions
         <div className="text-center text-muted-foreground py-12">
           <p className="text-xl mb-2">No Politicians Found in the Database</p>
           <p className="mb-4">It looks like there are no politicians listed yet. Be the first to add one!</p>
+           {/* Button removed from here as it's now globally at the top */}
         </div>
       ) : (
         <>
@@ -269,6 +295,6 @@ export default function PoliticiansPage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div> // This closes the main "container" div
-  ); // This closes the main return statement
-} // This closes the PoliticiansPage function
+    </div>
+  ); 
+} 
