@@ -1,6 +1,7 @@
 
 // src/app/politicians/page.tsx
 import React, { Suspense } from 'react';
+import Link from 'next/link'; // Added Link for "contribute" message
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { PoliticianSummary, PartyFilterOption, ProvinceFilterOption } from '@/types/entities';
 import PoliticianFilters from '@/components/politicians/PoliticianFilters';
@@ -61,7 +62,7 @@ async function fetchInitialPoliticians(
     .eq('politician_positions.is_current', true)
     .limit(1, { foreignTable: 'party_memberships' })
     .limit(1, { foreignTable: 'politician_positions' })
-    .order('created_at', { ascending: false }) // Consider ordering by name or relevance
+    .order('created_at', { ascending: false }) 
     .range(offset, offset + ITEMS_PER_PAGE - 1);
 
   if (searchQuery) {
@@ -91,7 +92,6 @@ async function fetchInitialPoliticians(
     );
     if (error.message.includes("column politicians.province does not exist")) {
          console.error("Correcting: 'province' column was queried, but 'province_id' exists.");
-         // This specific error was addressed, this log is for historical context if it reappears.
     }
     return { politicians: [], count: 0 };
   }
@@ -104,7 +104,6 @@ async function fetchInitialPoliticians(
     rawPoliticians.map(async (p: any) => {
       let photoUrl: string | null = null;
       if (p.photo_asset_id) {
-        // Using server-side specific function for public URL if needed
         photoUrl = await getPublicUrlForMediaAsset(String(p.photo_asset_id));
       }
 
@@ -114,18 +113,16 @@ async function fetchInitialPoliticians(
       const currentPosition = p.politician_positions?.find((pp: any) => pp.is_current);
       const currentPositionTitle = currentPosition?.position_titles?.title || 'N/A';
       
-      // Fetch aggregate vote score from entity_votes for this politician
       const { data: votesData, error: votesError } = await supabase
         .from('entity_votes')
-        .select('vote_type') // Removed { count: 'exact' }
+        .select('vote_type')
         .eq('entity_id', p.id)
-        .eq('entity_type', 'Politician'); // Filter by entity type
+        .eq('entity_type', 'Politician');
 
       let vote_score = 0;
       if (votesError) {
         console.warn(`Error fetching votes for politician ${p.id}: ${votesError.message}`);
       } else if (votesData) {
-        // Calculate sum of vote_type
         vote_score = votesData.reduce((acc, vote) => acc + (vote.vote_type || 0), 0);
       }
 
@@ -178,6 +175,12 @@ export default async function PoliticiansPage({
   if (searchParams?.has_criminal_record) paramsForPagination.set('has_criminal_record', searchParams.has_criminal_record);
   if (searchParams?.view) paramsForPagination.set('view', searchParams.view);
 
+  const isInitialLoadAndEmpty = !searchParams?.q && 
+                                !searchParams?.partyId && 
+                                !searchParams?.provinceId && 
+                                (!searchParams?.has_criminal_record || searchParams?.has_criminal_record === 'any') && 
+                                count === 0;
+
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:p-8">
       <header className="mb-8 md:mb-12 text-center">
@@ -193,24 +196,36 @@ export default async function PoliticiansPage({
         <PoliticianFilters initialParties={parties} initialProvinces={provinces} />
       </Suspense>
       
-      <Suspense fallback={
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mt-8">
-          {Array.from({ length: ITEMS_PER_PAGE }).map((_, index) => (
-            <Skeleton key={index} className="h-[350px] w-full rounded-lg" />
-          ))}
+      {isInitialLoadAndEmpty ? (
+        <div className="text-center text-muted-foreground py-12">
+          <p className="text-xl mb-2">No Politicians Found in the Database</p>
+          <p className="mb-4">It looks like there are no politicians listed yet.</p>
+          <Button asChild>
+            <Link href="/contribute/politician">Contribute the First Politician</Link>
+          </Button>
         </div>
-      }>
-        <PoliticianList initialPoliticians={politicians} initialTotalCount={count ?? 0} />
-      </Suspense>
+      ) : (
+        <>
+          <Suspense fallback={
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mt-8">
+              {Array.from({ length: ITEMS_PER_PAGE }).map((_, index) => (
+                <Skeleton key={index} className="h-[350px] w-full rounded-lg" />
+              ))}
+            </div>
+          }>
+            <PoliticianList initialPoliticians={politicians} initialTotalCount={count ?? 0} />
+          </Suspense>
 
-      {count !== null && totalPages > 1 && (
-        <PaginationControls
-          currentPage={currentPage}
-          totalCount={count}
-          itemsPerPage={ITEMS_PER_PAGE}
-          basePath="/politicians"
-          currentSearchParams={paramsForPagination}
-        />
+          {count !== null && totalPages > 1 && (
+            <PaginationControls
+              currentPage={currentPage}
+              totalCount={count}
+              itemsPerPage={ITEMS_PER_PAGE}
+              basePath="/politicians"
+              currentSearchParams={paramsForPagination}
+            />
+          )}
+        </>
       )}
     </div>
   );
