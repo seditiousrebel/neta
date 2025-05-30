@@ -24,7 +24,7 @@ export async function isAdminUser(): Promise<boolean> {
   // Fetch the user's profile from your public.users table
   const { data: userProfile, error } = await supabase
     .from('users')
-    .select('user_role') // Select user_role
+    .select('role') // Select role
     .eq('id', authUser.id)
     .single();
 
@@ -33,7 +33,7 @@ export async function isAdminUser(): Promise<boolean> {
     return false; // Error fetching profile, assume not admin for safety
   }
 
-  return userProfile?.user_role === 'Admin'; // Check user_role here
+  return userProfile?.role === 'Admin'; // Check role here
 }
 
 const ITEMS_PER_PAGE_ADMIN = 15;

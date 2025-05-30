@@ -6,9 +6,9 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useCa
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { SupabaseClient, AuthChangeEvent, Session as SupabaseSession } from '@supabase/supabase-js'; // Renamed Session to avoid conflict
 import { useToast } from "@/hooks/use-toast";
-import type { Database } from '@/types/supabase'; // Ensure this path is correct
+import type { Database, Tables } from '@/types/supabase'; // Ensure this path is correct
 
-type UserProfile = Database['public']['Tables']['users']['Row'];
+type UserProfile = Tables<'users'>['Row'];
 
 interface AuthContextType {
   user: User | null;
@@ -28,12 +28,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
 
   const fetchUserProfile = async (userId: string): Promise<Partial<UserProfile> | null> => {
-    // Be specific about columns to avoid errors if some don't exist yet in user's schema
-    // Temporarily removing user_role from select to prevent "column does not exist" error.
-    // User MUST add a role column (e.g., 'role' or 'user_role') to their public.users table.
     const { data, error } = await supabase
       .from('users')
-      .select('id, full_name, email, contribution_points, avatar_url, bio') // Explicitly removed user_role for now
+      .select('id, full_name, email, role, contribution_points, avatar_url, bio') // Ensure 'role' is selected
       .eq('id', userId)
       .maybeSingle();
 
@@ -55,12 +52,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email: authUser.email,
         name: userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
         avatarUrl: userProfile?.avatar_url || authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${(userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email || 'U').charAt(0).toUpperCase()}`,
-        // If userProfile.user_role is not available (due to missing column), this will default to 'User'
-        // @ts-ignore // Temp ignore if user_role is not in UserProfile because of select
-        role: userProfile?.user_role || 'User',
-        // @ts-ignore // Temp ignore if contribution_points is not in UserProfile
+        role: userProfile?.role || 'User', // Use userProfile.role
         contributionPoints: userProfile?.contribution_points || 0,
-        // @ts-ignore // Temp ignore if bio is not in UserProfile
         bio: userProfile?.bio || (authUser.user_metadata?.bio as string) || null,
       };
       setUser(appUser);

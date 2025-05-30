@@ -50,13 +50,13 @@ export async function middleware(request: NextRequest) {
   if (isAuthenticated && isAdminPage(pathname)) {
     const { data: userProfile, error: profileError } = await supabase
       .from('users')
-      .select('user_role') // Check user_role
+      .select('role') // Check role
       .eq('id', user.id)
-      .single<Pick<Database['public']['Tables']['users']['Row'], 'user_role'>>();
+      .single<Pick<Database['public']['Tables']['users']['Row'], 'role'>>();
 
-    if (profileError || !userProfile || userProfile.user_role !== 'Admin') { // Check user_role here
+    if (profileError || !userProfile || userProfile.role !== 'Admin') { // Check role here
       // Not an admin or profile error, redirect to home or an unauthorized page
-      console.warn(`User ${user.id} attempted to access admin route ${pathname} without Admin role. Current role: ${userProfile?.user_role}`);
+      console.warn(`User ${user.id} attempted to access admin route ${pathname} without Admin role. Current role: ${userProfile?.role}`);
       return NextResponse.redirect(new URL('/', request.url)); // Or a specific /unauthorized page
     }
   }

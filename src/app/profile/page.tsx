@@ -34,13 +34,13 @@ export default async function ProfilePage() {
       id,
       full_name,
       email,
-      user_role, -- Fetch user_role
+      role, -- Fetch role
       contribution_points,
       avatar_url,
       bio
     `)
     .eq('id', authUser.id)
-    .maybeSingle<Pick<Tables<'users'>['Row'], 'id' | 'full_name' | 'email' | 'user_role' | 'contribution_points' | 'avatar_url' | 'bio'>>();
+    .maybeSingle<Pick<Tables<'users'>['Row'], 'id' | 'full_name' | 'email' | 'role' | 'contribution_points' | 'avatar_url' | 'bio'>>();
 
   let currentUser: User;
 
@@ -55,7 +55,7 @@ export default async function ProfilePage() {
       email: userProfileData.email,
       avatarUrl: userProfileData.avatar_url || authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${getInitials(userProfileData.full_name)}`,
       bio: userProfileData.bio || (authUser.user_metadata?.bio as string) || null,
-      role: userProfileData.user_role || 'User', // Use user_role here
+      role: userProfileData.role || 'User', // Use userProfileData.role here
       contributionPoints: userProfileData.contribution_points,
     };
   } else {
@@ -67,7 +67,7 @@ export default async function ProfilePage() {
       email: authUser.email,
       avatarUrl: authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${getInitials(authUser.user_metadata?.full_name || authUser.email)}`,
       bio: (authUser.user_metadata?.bio as string) || null,
-      role: (authUser.user_metadata?.user_role as string) || 'User', // Fallback to metadata user_role or default
+      role: (authUser.user_metadata?.role as string) || 'User', // Fallback to metadata role or default
       contributionPoints: 0, // Default points
     };
   }
