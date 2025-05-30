@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useForm, Controller, useWatch } from 'react-hook-form'; // Added useWatch
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
@@ -47,7 +47,8 @@ const politicianFormSchema = z.object({
   photo_asset_id: z.string().uuid({message: "Invalid photo asset ID format."}).optional().nullable(),
 
   biography: z.string().optional(),
-  education_details: z.string().optional(),
+  // Use string for Markdown input, parsing/validation happens elsewhere or on display
+  education_details: z.string().optional(), 
   political_journey: z.string().optional(),
 
   criminal_records: z.array(criminalRecordSchema).optional().default([]),
@@ -75,6 +76,15 @@ interface PoliticianFormProps {
   politicianId?: string; // Required if mode is 'edit'
   initialData?: Partial<PoliticianFormData>; // For pre-filling in 'edit' mode
 }
+
+const GENDER_NOT_SPECIFIED_SENTINEL = "__NOT_SPECIFIED_GENDER__";
+const GENDER_OPTIONS: Array<{ value: PoliticianFormData['gender'] | typeof GENDER_NOT_SPECIFIED_SENTINEL, label: string }> = [
+    { value: GENDER_NOT_SPECIFIED_SENTINEL, label: "(Not Specified)" },
+    { value: "Male", label: "Male" },
+    { value: "Female", label: "Female" },
+    { value: "Other", label: "Other" },
+    { value: "PreferNotToSay", label: "Prefer not to say" },
+];
 
 const PoliticianForm: React.FC<PoliticianFormProps> = ({
   onSubmit,
@@ -218,14 +228,15 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({
           <FormField control={form.control} name="gender" render={({ field }) => (
               <FormItem>
                 <FormLabel>Gender</FormLabel>
-                 <Select onValueChange={field.onChange} value={field.value || ''}>
+                 <Select
+                    onValueChange={(value) => field.onChange(value === GENDER_NOT_SPECIFIED_SENTINEL ? '' : value)}
+                    value={field.value === '' || field.value === undefined ? GENDER_NOT_SPECIFIED_SENTINEL : field.value}
+                 >
                   <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
                   <SelectContent>
-                    <SelectItem value="">(Not Specified)</SelectItem>
-                    <SelectItem value="Male">Male</SelectItem>
-                    <SelectItem value="Female">Female</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                    <SelectItem value="PreferNotToSay">Prefer not to say</SelectItem>
+                    {GENDER_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value as string}>{opt.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <FormMessage />
