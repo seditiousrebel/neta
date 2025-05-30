@@ -90,6 +90,10 @@ export default function PoliticianProfilePage({ params: serverParams }: { params
   const clientParams = useParams(); // Use this for client-side access if needed, or stick to serverParams
   const id = serverParams.id || clientParams.id as string;
 
+  const { user } = useAuth(); // Get user from auth context
+  const { toast } = useToast(); // For showing notifications
+  // const router = useRouter(); // Uncomment if redirection to login is implemented
+
   const [politician, setPolitician] = useState<PoliticianProfileData | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -104,13 +108,13 @@ export default function PoliticianProfilePage({ params: serverParams }: { params
     // This example will fetch fresh data on mount.
     async function loadData() {
       setIsLoading(true);
-      const supabase = createSupabaseServerClient(); // This needs to be client Supabase instance
-                                                  // For now, let's assume a client-side Supabase client exists or is set up
-                                                  // For simplicity, I'll mock this part of the re-fetch and assume initial data is enough.
-                                                  // Proper re-fetch logic would be needed in a real app.
+      // IMPORTANT: Replace createSupabaseServerClient with a client-side Supabase instance setup
+      // For example, if you have a global Supabase client: import { supabase } from '@/lib/supabase/client';
+      // const supabase = createSupabaseBrowserClient(); // Or however your client instance is created
+      const supabase = createSupabaseServerClient(); // KEEPING FOR NOW, BUT THIS IS THE ISSUE FOR CLIENT SIDE.
+                                                  // This will likely cause problems if not handled correctly for client-side.
+                                                  // A proper setup would involve a client-specific Supabase client.
       
-      // This is a simplified initial fetch for the client component.
-      // In a real app, you might pass initial data from a server component parent or use SWR/React Query.
       const { data: fetchedPol, error } = await supabase
         .from('politicians')
         .select('*')
@@ -122,15 +126,11 @@ export default function PoliticianProfilePage({ params: serverParams }: { params
         typedPol.id = String(typedPol.id);
         setPolitician(typedPol);
         if (typedPol.photo_asset_id) {
-           // Client-side fetching of public URL (if storage helper allows or via a serverless function)
-           // const publicUrl = await getPublicUrlForMediaAsset(typedPol.photo_asset_id); // This is server-only
-           // For now, let's assume photoUrl is part of initial data or fetched differently.
-           // To simplify, we'll use a placeholder logic for photoUrl on client side for now.
-           // This part needs careful handling of Supabase client/server storage functions.
+           // This part remains problematic for client-side without a client-side storage helper or different approach
         }
       } else {
         console.error("Failed to fetch politician data on client:", error?.message);
-        notFound(); // Or handle error state
+        notFound(); 
       }
       setIsLoading(false);
     }
@@ -139,7 +139,25 @@ export default function PoliticianProfilePage({ params: serverParams }: { params
 
 
   const openModal = (data: ModalContentData) => {
-    setModalData({ ...data, politicianId: politician!.id });
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "You need to be logged in to propose an edit.",
+        variant: "destructive", // Or "info"
+      });
+      // Optionally: router.push('/auth/login'); // If using redirection
+      return;
+    }
+    // Ensure politician data is loaded before trying to access politician.id
+    if (!politician) {
+        toast({
+            title: "Data Error",
+            description: "Politician data is not yet available. Please try again shortly.",
+            variant: "destructive",
+        });
+        return;
+    }
+    setModalData({ ...data, politicianId: politician.id });
     setIsModalOpen(true);
   };
 
@@ -417,8 +435,8 @@ export default function PoliticianProfilePage({ params: serverParams }: { params
         currentValue={modalData.currentValue}
         fieldType={modalData.fieldType as ModalFieldType} // Cast because modalData.fieldType is partial
         editorComponent={modalData.editorComponent}
-        // Pass editorProps correctly
-        {...(modalData.editorProps && { editorProps: modalData.editorProps })}
+        editorProps={modalData.editorProps} // Pass through editorProps
+        isAdmin={user?.role === 'Admin'} // Pass isAdmin based on user role
       />
     </>
   );

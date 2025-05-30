@@ -13,10 +13,15 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { RichTextEditor } from './RichTextEditor'; // Keep RichTextEditorProps if specifically used, else EditorProps covers it.
-import { submitPoliticianEdit, SubmitEditReturnType } from '@/lib/actions/politician.actions'; // Import the server action
-import { useAuth } from '@/contexts/auth-context'; // Import auth context
-import { useToast } from '@/hooks/use-toast'; // Import toast hook
+import { RichTextEditor } from './RichTextEditor';
+import { 
+  submitPoliticianEdit, 
+  SubmitEditReturnType,
+  updatePoliticianDirectly, // Import the new action
+  DirectUpdateReturnType 
+} from '@/lib/actions/politician.actions';
+import { useAuth } from '@/contexts/auth-context';
+import { useToast } from '@/hooks/use-toast';
 
 
 // Props that custom editors will receive
@@ -46,6 +51,7 @@ export interface EditModalProps {
   fieldOptions?: string[]; // For 'select' type
   editorComponent?: React.ComponentType<EditorProps<any>>; // Allow any value type for custom editor for now
   editorProps?: Record<string, any>; // For passing additional props like isBSDate to editors
+  isAdmin?: boolean; // Added isAdmin prop
 }
 
 export function EditModal({
@@ -58,7 +64,8 @@ export function EditModal({
   fieldLabel,
   fieldOptions,
   editorComponent: CustomEditor, // Renamed for clarity
-  editorProps, // Added editorProps here
+  editorProps,
+  isAdmin = false, // Default isAdmin to false
 }: EditModalProps) {
   const [newValue, setNewValue] = useState(currentValue);
   const [changeReason, setChangeReason] = useState('');
@@ -87,39 +94,85 @@ export function EditModal({
       toast({ title: "Authentication Error", description: "You must be logged in to submit an edit.", variant: "destructive" });
       return;
     }
-    if (!changeReason.trim() || newValue === currentValue) {
-      // This should ideally be prevented by button's disabled state, but good for robustness
-      toast({ title: "No Changes", description: "Please make a change and provide a reason.", variant: "default" });
+
+    const valueChanged = newValue !== currentValue;
+    if (!valueChanged) {
+      toast({ title: "No Changes Made", description: "The value is the same as the current one.", variant: "info" });
       return;
     }
 
+    if (!isAdmin && !changeReason.trim()) {
+      toast({ title: "Change Reason Required", description: "Please provide a reason for your edit.", variant: "destructive" });
+      return;
+    }
+    
     setIsSubmitting(true);
-    try {
-      const result: SubmitEditReturnType = await submitPoliticianEdit(
-        politicianId,
-        fieldName,
-        newValue, // Send the actual new value, action will handle stringification if needed for JSON
-        changeReason,
-        user.id 
-      );
 
-      if (result.success) {
-        toast({ title: "Edit Submitted", description: result.message || "Your edit proposal has been submitted for review.", variant: "success" });
-        onClose(); // Close modal on successful submission
-      } else {
-        console.error('Submission failed:', result.error);
-        toast({ title: "Submission Failed", description: result.message || "An error occurred.", variant: "destructive" });
+    if (isAdmin) {
+      try {
+        const result: DirectUpdateReturnType = await updatePoliticianDirectly(
+          politicianId,
+          fieldName,
+          newValue,
+          user.id, // adminId
+          changeReason.trim() // Optional reason for admin
+        );
+
+        if (result.success) {
+          toast({ 
+            title: "Admin Edit Successful", 
+            description: result.message || `Field "${fieldName}" updated directly.`, 
+            variant: "success" 
+          });
+          onClose();
+        } else {
+          console.error('Admin direct update failed:', result.error);
+          toast({ 
+            title: "Admin Edit Failed", 
+            description: result.message || result.error || "Could not apply changes directly.", 
+            variant: "destructive" 
+          });
+        }
+      } catch (error: any) {
+        console.error('Unexpected error during admin direct update:', error);
+        toast({ title: "Error", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+      } finally {
+        setIsSubmitting(false);
       }
-    } catch (error: any) {
-      console.error('Unexpected error during submission:', error);
-      toast({ title: "Error", description: error.message || "An unexpected error occurred.", variant: "destructive" });
-    } finally {
-      setIsSubmitting(false);
+    } else {
+      // Non-admin: submit for review
+      try {
+        const result: SubmitEditReturnType = await submitPoliticianEdit(
+          politicianId,
+          fieldName,
+          newValue,
+          changeReason, // Already checked for non-admin
+          user.id
+        );
+
+        if (result.success) {
+          toast({ title: "Edit Submitted", description: result.message || "Your edit proposal has been submitted for review.", variant: "success" });
+          onClose();
+        } else {
+          console.error('Submission failed:', result.error);
+          toast({ title: "Submission Failed", description: result.message || "An error occurred.", variant: "destructive" });
+        }
+      } catch (error: any) {
+        console.error('Unexpected error during submission:', error);
+        toast({ title: "Error", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
   const isValueChanged = newValue !== currentValue;
-  const canSubmit = isValueChanged && changeReason.trim() !== '' && !isSubmitting;
+  // Adjust canSubmit logic for admin
+  const canSubmit = 
+    isValueChanged && 
+    (isAdmin || changeReason.trim() !== '') && 
+    !isSubmitting;
+    
   const displayLabel = fieldLabel || fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
 
   if (!isOpen) {
@@ -224,15 +277,19 @@ export function EditModal({
 
           <div className="grid grid-cols-4 items-start gap-4"> {/* Changed items-center to items-start */}
             <Label htmlFor="changeReason" className="text-right pt-2 self-start">
-              Change Reason
+              Change Reason {isAdmin ? '(Optional)' : <span className="text-destructive">*</span>}
             </Label>
             <Textarea
               id="changeReason"
               value={changeReason}
               onChange={handleReasonChange}
-              placeholder="Explain why you are making this change (required)"
+              placeholder={
+                isAdmin 
+                  ? "Optional: Explain why you are making this change as an admin."
+                  : "Explain why you are making this change (required)"
+              }
               className="col-span-3 min-h-[100px]"
-              required
+              required={!isAdmin} // HTML5 required attribute
             />
           </div>
 
