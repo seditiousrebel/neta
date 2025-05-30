@@ -1,19 +1,28 @@
+
 // src/components/upload/PhotoUpload.tsx
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import ReactCrop, { Crop, centerCrop, makeAspectCrop, PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/contexts/auth-context'; // Ensure this path is correct
-import { uploadAndCreateMediaAsset } from '@/lib/uploadUtils'; // Ensure this path is correct
+import { useAuth } from '@/contexts/auth-context'; 
+import { uploadAndCreateMediaAsset, getPublicUrlForMediaAsset } from '@/lib/uploadUtils'; 
+import Image from 'next/image'; // For displaying initial preview
+import { Loader2 } from 'lucide-react'; // For loading state
 
 interface PhotoUploadProps {
   onUploadComplete: (assetId: string) => void;
   assetType: string;
-  aspectRatio?: number; // e.g., 1 for square, 16/9 for landscape
+  aspectRatio?: number; 
+  initialPreviewUrl?: string | null; // For edit mode: existing asset ID or direct URL
 }
 
-const PhotoUpload: React.FC<PhotoUploadProps> = ({ onUploadComplete, assetType, aspectRatio = 1 }) => {
+const PhotoUpload: React.FC<PhotoUploadProps> = ({ 
+    onUploadComplete, 
+    assetType, 
+    aspectRatio = 1,
+    initialPreviewUrl 
+}) => {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [crop, setCrop] = useState<Crop | undefined>();
@@ -21,7 +30,28 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ onUploadComplete, assetType, 
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialUrlLoading, setIsInitialUrlLoading] = useState(false);
   const { user } = useAuth(); 
+
+  useEffect(() => {
+    if (initialPreviewUrl) {
+      // If it's a full URL, use it directly. If it's an asset ID, fetch the URL.
+      if (initialPreviewUrl.startsWith('http')) {
+        setImageSrc(initialPreviewUrl);
+      } else {
+        // Assume it's an asset ID
+        setIsInitialUrlLoading(true);
+        getPublicUrlForMediaAsset(initialPreviewUrl)
+          .then(url => {
+            if (url) setImageSrc(url);
+            else console.warn("Could not fetch initial preview URL for asset ID:", initialPreviewUrl);
+          })
+          .catch(err => console.error("Error fetching initial preview:", err))
+          .finally(() => setIsInitialUrlLoading(false));
+      }
+    }
+  }, [initialPreviewUrl]);
+
 
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     imgRef.current = e.currentTarget;
@@ -40,6 +70,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ onUploadComplete, assetType, 
         height
     );
     setCrop(newCrop);
+    setCompletedCrop(null); // Reset completed crop when new image loads
   };
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -48,6 +79,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ onUploadComplete, assetType, 
       setFile(currentFile);
       setError(null);
       setCompletedCrop(null); 
+      imgRef.current = null; // Reset imgRef so new image dimensions are used
       const reader = new FileReader();
       reader.addEventListener('load', () => {
         setImageSrc(reader.result as string);
@@ -91,7 +123,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ onUploadComplete, assetType, 
 
         canvas.toBlob((blob) => {
             resolve(blob);
-        }, file?.type || 'image/jpeg', 0.85); // Adjust quality if needed
+        }, file?.type || 'image/jpeg', 0.85); 
     });
   };
   
@@ -100,36 +132,56 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ onUploadComplete, assetType, 
       setError('User not logged in.');
       return;
     }
-    if (!file) {
-        setError('No file selected.');
+    if (!file && !imageSrc) { // If no new file and no existing image to re-process (though re-process isn't typical without a new file)
+        setError('No file selected for upload.');
         return;
     }
 
     setIsLoading(true);
     setError(null);
 
-    let fileToUpload = file;
+    let fileToUpload = file; // If a new file was dropped, use it
 
-    if (imgRef.current && completedCrop && completedCrop.width && completedCrop.height) {
+    // If there's no new file, but there's an imageSrc (from initialData) and a crop,
+    // it implies re-cropping an existing image. This is complex and usually not how asset_id based systems work.
+    // For now, we only upload if a new `file` is present.
+    // If an existing image (initialPreviewUrl) is shown and user wants to "re-upload" it (e.g. after cropping),
+    // they should re-select the original file.
+    // This logic primarily handles NEW file uploads.
+    
+    if (fileToUpload && imgRef.current && completedCrop && completedCrop.width && completedCrop.height) {
         const croppedBlob = await getCroppedImgBlob(imgRef.current, completedCrop);
         if (croppedBlob) {
-            fileToUpload = new File([croppedBlob], file.name, { type: file.type });
+            fileToUpload = new File([croppedBlob], fileToUpload.name, { type: fileToUpload.type });
         } else {
             setError("Could not process the cropped image. Please try again.");
             setIsLoading(false);
             return;
         }
+    } else if (!fileToUpload) {
+        // This case means there's an initial image, no new file, and maybe no crop.
+        // We typically don't "re-upload" just because of a crop on an existing remote image.
+        // The onUploadComplete usually expects a NEW asset ID.
+        // If the intention is to just update the crop coordinates for an existing image, that's a different system.
+        // For now, let's assume upload means a new file (or new version of one).
+        setError("No new file selected for upload. If you re-cropped, please re-select the image to upload the new version.");
+        setIsLoading(false);
+        return;
     }
+
 
     try {
       const result = await uploadAndCreateMediaAsset(fileToUpload, assetType, user.id);
       if (result && result.id) {
-        onUploadComplete(result.id);
-        setImageSrc(null);
-        setFile(null);
-        setCrop(undefined);
-        setCompletedCrop(null);
-        imgRef.current = null;
+        onUploadComplete(result.id); // This returns the NEW asset ID
+        // Don't clear imageSrc if it came from initialPreviewUrl and no new file was dropped
+        // This is tricky: if they upload a new file, we should clear. If it's from initialData, it's up to parent.
+        // For now, let parent handle resetting initialPreviewUrl if desired after successful upload.
+        // setFile(null); // Clear the dropped file
+        // setCrop(undefined);
+        // setCompletedCrop(null);
+        // imgRef.current = null; 
+        // The parent form will likely re-render with the new asset_id, which would update initialPreviewUrl
       } else {
         throw new Error('Upload failed or asset ID not returned.');
       }
@@ -146,7 +198,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ onUploadComplete, assetType, 
       <div
         {...getRootProps()}
         className={`p-6 border-2 border-dashed rounded-md text-center cursor-pointer
-                    ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
+                    ${isDragActive ? 'border-primary bg-primary/10' : 'border-input hover:border-primary/50'}`}
       >
         <input {...getInputProps()} />
         {isDragActive ? (
@@ -156,9 +208,11 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ onUploadComplete, assetType, 
         )}
       </div>
 
-      {error && <p className="text-red-500 text-sm">{error}</p>}
+      {error && <p className="text-destructive text-sm">{error}</p>}
 
-      {imageSrc && (
+      {isInitialUrlLoading && <Loader2 className="mx-auto my-4 h-6 w-6 animate-spin text-primary" />}
+      
+      {imageSrc && !isInitialUrlLoading && (
         <div className="mt-4 flex flex-col items-center">
           <ReactCrop
             crop={crop}
@@ -168,25 +222,32 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ onUploadComplete, assetType, 
             minWidth={100} 
             minHeight={100} 
           >
-            <img 
+            <Image // Use Next/Image for better performance and optimization
               src={imageSrc} 
               alt="Preview" 
+              width={0} // Required for layout="responsive" if not fill
+              height={0}
+              sizes="100vw"
+              style={{ width: '100%', height: 'auto', maxHeight: '400px', objectFit: 'contain' }}
               onLoad={onImageLoad}
-              style={{ maxHeight: '400px', objectFit: 'contain' }} 
+              priority={false}
             />
           </ReactCrop>
         </div>
       )}
 
-      {file && (
+      {(file || (imageSrc && completedCrop)) && ( // Allow upload if new file OR existing image is cropped
         <div className="mt-4 flex flex-col items-center">
-          <p className="text-sm text-gray-600 mb-2">File: {file.name}</p>
+          {file && <p className="text-sm text-muted-foreground mb-2">New file: {file.name}</p>}
           <Button 
             onClick={handleUpload} 
-            disabled={isLoading || !user || (!file && !imageSrc) || (imageSrc && (!completedCrop || completedCrop.width === 0))}
+            disabled={isLoading || !user || (!file && (!imageSrc || !completedCrop || completedCrop.width === 0))}
           >
-            {isLoading ? 'Uploading...' : (completedCrop && imageSrc && completedCrop.width > 0 ? 'Upload Cropped Image' : 'Upload Original Image')}
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Upload Image'}
           </Button>
+          {imageSrc && completedCrop && completedCrop.width > 0 && !file && (
+            <p className="text-xs text-muted-foreground mt-1">Note: Re-select file to upload a cropped version of an existing image.</p>
+          )}
         </div>
       )}
     </div>
@@ -194,3 +255,4 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ onUploadComplete, assetType, 
 };
 
 export default PhotoUpload;
+    

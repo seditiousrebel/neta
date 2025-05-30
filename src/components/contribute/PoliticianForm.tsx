@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useForm, useWatch, Controller } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
@@ -17,14 +17,14 @@ import { Loader2 } from 'lucide-react';
 import { CriminalRecordEditor, type CriminalRecord } from '@/components/wiki/CriminalRecordEditor';
 import { AssetDeclarationEditor, type AssetDeclaration } from '@/components/wiki/AssetDeclarationEditor';
 
-const LOCAL_STORAGE_KEY_NEW_POLITICIAN = 'newPoliticianFormDraft_v2'; // Incremented version due to schema change
+const LOCAL_STORAGE_KEY_NEW_POLITICIAN_CREATE = 'newPoliticianFormDraft_create_v3';
+const LOCAL_STORAGE_KEY_NEW_POLITICIAN_EDIT_PREFIX = 'newPoliticianFormDraft_edit_v3_';
 
-// Zod Schema for validation
 
 const criminalRecordSchema = z.object({
   id: z.string().uuid(),
   case_description: z.string().min(1, "Case description is required."),
-  offense_date: z.string().optional().or(z.literal('')), // YYYY-MM-DD or empty
+  offense_date: z.string().optional().or(z.literal('')), 
   court_name: z.string().optional(),
   case_status: z.enum(['Pending', 'Convicted', 'Acquitted', 'Discharged', '']).optional(),
   sentence_details: z.string().optional(),
@@ -46,9 +46,9 @@ const politicianFormSchema = z.object({
   gender: z.enum(['Male', 'Female', 'Other', 'PreferNotToSay', '']).optional(),
   photo_asset_id: z.string().uuid({message: "Invalid photo asset ID format."}).optional().nullable(),
 
-  biography: z.string().optional(), // Uses Markdown
-  education_details: z.string().optional(), // Uses Markdown
-  political_journey: z.string().optional(), // Uses Markdown
+  biography: z.string().optional(), 
+  education_details: z.string().optional(), 
+  political_journey: z.string().optional(), 
 
   criminal_records: z.array(criminalRecordSchema).optional().default([]),
   asset_declarations: z.array(assetDeclarationSchema).optional().default([]),
@@ -69,13 +69,24 @@ const politicianFormSchema = z.object({
 export type PoliticianFormData = z.infer<typeof politicianFormSchema>;
 
 interface PoliticianFormProps {
-  onSubmit: (data: PoliticianFormData) => void;
+  onSubmit: (data: PoliticianFormData) => void; // This callback triggers the preview step
   isLoading?: boolean;
-  defaultValues?: Partial<PoliticianFormData>;
+  mode?: 'create' | 'edit';
+  politicianId?: string; // Required if mode is 'edit'
+  initialData?: Partial<PoliticianFormData>; // For pre-filling in 'edit' mode
 }
 
-const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, defaultValues }) => {
+const PoliticianForm: React.FC<PoliticianFormProps> = ({
+  onSubmit,
+  isLoading,
+  mode = 'create',
+  politicianId,
+  initialData,
+}) => {
   const [draftSaveStatus, setDraftSaveStatus] = useState<string>('');
+  const localStorageKey = mode === 'create'
+    ? LOCAL_STORAGE_KEY_NEW_POLITICIAN_CREATE
+    : `${LOCAL_STORAGE_KEY_NEW_POLITICIAN_EDIT_PREFIX}${politicianId || ''}`;
 
   const form = useForm<PoliticianFormData>({
     resolver: zodResolver(politicianFormSchema),
@@ -92,26 +103,34 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
       asset_declarations: [],
       contact_information: { email: '', phone: '', address: '' },
       social_media_handles: { twitter: '', facebook: '', instagram: '' },
-      ...defaultValues,
+      ...(mode === 'edit' && initialData ? initialData : {}),
     },
   });
 
   useEffect(() => {
-    const savedDraft = localStorage.getItem(LOCAL_STORAGE_KEY_NEW_POLITICIAN);
-    if (savedDraft) {
-      try {
-        const draftData = JSON.parse(savedDraft);
-        // Ensure array fields are initialized correctly if missing from draft
-        draftData.criminal_records = draftData.criminal_records || [];
-        draftData.asset_declarations = draftData.asset_declarations || [];
-        form.reset(draftData);
-        setDraftSaveStatus("Draft loaded from last session.");
-      } catch (error) {
-        console.error("Error parsing saved draft:", error);
-        localStorage.removeItem(LOCAL_STORAGE_KEY_NEW_POLITICIAN);
+    // Pre-fill form if in edit mode and initialData is provided
+    if (mode === 'edit' && initialData) {
+      form.reset(initialData);
+    }
+  }, [mode, initialData, form]);
+
+  useEffect(() => {
+    if (mode === 'create' || (mode === 'edit' && politicianId)) { // Only load draft if relevant
+      const savedDraft = localStorage.getItem(localStorageKey);
+      if (savedDraft && (!initialData || form.formState.isDirty)) { // Don't overwrite pristine initialData with old draft
+        try {
+          const draftData = JSON.parse(savedDraft);
+          draftData.criminal_records = draftData.criminal_records || [];
+          draftData.asset_declarations = draftData.asset_declarations || [];
+          form.reset(draftData);
+          setDraftSaveStatus("Draft loaded from last session.");
+        } catch (error) {
+          console.error("Error parsing saved draft:", error);
+          localStorage.removeItem(localStorageKey);
+        }
       }
     }
-  }, [form]);
+  }, [form, localStorageKey, mode, politicianId, initialData]);
 
   const debounce = <F extends (...args: any[]) => any>(func: F, delay: number) => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -124,9 +143,11 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
   const watchedValues = useWatch({ control: form.control });
 
   const saveDraft = useCallback(debounce((data: PoliticianFormData) => {
-    localStorage.setItem(LOCAL_STORAGE_KEY_NEW_POLITICIAN, JSON.stringify(data));
-    setDraftSaveStatus(`Draft autosaved at ${new Date().toLocaleTimeString()}`);
-  }, 1500), []);
+    if (mode === 'create' || (mode === 'edit' && politicianId)) {
+      localStorage.setItem(localStorageKey, JSON.stringify(data));
+      setDraftSaveStatus(`Draft autosaved at ${new Date().toLocaleTimeString()}`);
+    }
+  }, 1500), [localStorageKey, mode, politicianId]);
 
   useEffect(() => {
     if (form.formState.isDirty) {
@@ -139,24 +160,23 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
   };
 
   const handleFormSubmitWrapper = (data: PoliticianFormData) => {
-    onSubmit(data);
-    // Consider clearing draft on successful preview navigation if desired
-    // localStorage.removeItem(LOCAL_STORAGE_KEY_NEW_POLITICIAN);
-    // setDraftSaveStatus("Draft cleared after submission to preview.");
+    onSubmit(data); // This now just calls the prop to show preview
   };
 
   const clearDraftManually = () => {
-    localStorage.removeItem(LOCAL_STORAGE_KEY_NEW_POLITICIAN);
+    localStorage.removeItem(localStorageKey);
     form.reset({
       name: '', name_nepali: '', dob: '', gender: undefined, photo_asset_id: null,
       biography: '', education_details: '', political_journey: '', 
       criminal_records: [], asset_declarations: [],
       contact_information: { email: '', phone: '', address: '' },
       social_media_handles: { twitter: '', facebook: '', instagram: '' },
-      ...defaultValues,
+      ...(mode === 'edit' && initialData ? initialData : {}),
     });
     setDraftSaveStatus("Draft cleared manually.");
   };
+
+  const submitButtonText = mode === 'create' ? 'Preview Contribution' : 'Preview Edits';
 
   return (
     <Form {...form}>
@@ -223,9 +243,12 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
                   onUploadComplete={handlePhotoUploaded}
                   assetType="politician_photo"
                   aspectRatio={1}
+                  initialPreviewUrl={
+                    mode === 'edit' && typeof field.value === 'string' ? field.value : undefined
+                  }
                 />
               </FormControl>
-              {field.value && <FormDescription className="mt-2">Photo uploaded. Asset ID: {field.value}</FormDescription>}
+              {field.value && <FormDescription className="mt-2">Photo asset ID: {field.value}</FormDescription>}
               <FormMessage />
             </FormItem>
           )}
@@ -368,7 +391,7 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
 
         <Button type="submit" disabled={isLoading || !form.formState.isDirty || !!Object.keys(form.formState.errors).length} className="mt-8 w-full md:w-auto">
           {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          {isLoading ? 'Processing...' : 'Preview Contribution'}
+          {isLoading ? 'Processing...' : submitButtonText}
         </Button>
       </form>
     </Form>
@@ -376,3 +399,4 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
 };
 
 export default PoliticianForm;
+    

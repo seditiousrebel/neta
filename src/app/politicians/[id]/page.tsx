@@ -7,7 +7,7 @@ import { getPublicUrlForMediaAsset } from '@/lib/uploadUtils';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter, notFound } from 'next/navigation';
+import { useRouter, notFound, Link } from 'next/navigation'; // Added Link
 import { Badge } from '@/components/ui/badge';
 import {
   User, Cake, VenetianMask, Info, Twitter, Facebook, Instagram, Globe, Mail, Phone, MapPin,
@@ -19,17 +19,17 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import Overview from '@/components/politicians/profile/Overview';
 import CareerTimeline from '@/components/politicians/profile/CareerTimeline';
-import CriminalRecordsDisplay from '@/components/politicians/profile/CriminalRecords'; // Renamed for clarity
+import CriminalRecordsDisplay from '@/components/politicians/profile/CriminalRecordsDisplay';
 import { EditModal, EditModalProps, FieldType as ModalFieldType, EditorProps } from '@/components/wiki/EditModal';
 import { EditButton } from '@/components/wiki/EditButton';
 import { RichTextEditor } from '@/components/wiki/RichTextEditor';
 import { DateEditor, DateEditorProps } from '@/components/wiki/DateEditor';
 import { CriminalRecordEditor, CriminalRecordEditorProps, type CriminalRecord } from '@/components/wiki/CriminalRecordEditor';
 import { AssetDeclarationEditor, AssetDeclarationEditorProps, type AssetDeclaration } from '@/components/wiki/AssetDeclarationEditor';
-import AssetDeclarationsDisplay from '@/components/politicians/profile/AssetDeclarations'; // Renamed for clarity
+import AssetDeclarationsDisplay from '@/components/politicians/profile/AssetDeclarationsDisplay'; 
 import EditHistory from '@/components/politicians/profile/EditHistory';
 import type { DetailedPolitician, PoliticianPartyMembership, PoliticianParty, PoliticianMediaAsset, ProvinceFilterOption, CareerJourneyEntry } from '@/types/entities';
-import { getProvinceFilterOptions } from '@/lib/supabase/data'; // For province select in modal
+import { getProvinceFilterOptions } from '@/lib/supabase/data'; 
 
 interface ModalContentData {
   fieldName: string;
@@ -120,7 +120,7 @@ async function getPoliticianDetails(politicianId: string): Promise<DetailedPolit
 }
 
 export default function PoliticianDetailPage({ params: serverParamsProp }: { params: { id: string } }) {
-  const resolvedServerParams = use(serverParamsProp);
+  const resolvedServerParams = use(serverParamsProp); // Resolve server params with use() hook
   const id = resolvedServerParams.id;
 
   const { user } = useAuth();
@@ -208,7 +208,6 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
         data.fieldOptions = provinceOptions;
     }
 
-    // For criminal records and asset declarations, ensure currentValue is an array
     let currentValueForModal = data.currentValue;
     if (data.fieldName === 'public_criminal_records' || data.fieldName === 'asset_declarations') {
         if (typeof data.currentValue === 'string') {
@@ -287,7 +286,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                             fieldLabel: 'Political Journey / Career Entries',
                             currentValue: politician.political_journey || '', 
                             fieldType: 'textarea', 
-                            editorProps: { placeholder: 'Enter political journey, ideally as JSON array of objects or structured text.', rows: 10},
+                            editorProps: { placeholder: 'Enter political journey using Markdown for structure.', rows: 10},
                             politicianId: String(politician.id),
                         })}
                         className="static opacity-100"
@@ -310,7 +309,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                        onClick={() => openModal({
                             fieldName: 'public_criminal_records',
                             fieldLabel: 'Criminal Records',
-                            currentValue: politician.public_criminal_records, // Will be parsed by openModal
+                            currentValue: politician.public_criminal_records, 
                             fieldType: 'custom',
                             editorComponent: CriminalRecordEditor,
                             editorProps: { /* if any specific props are needed */ },
@@ -336,7 +335,7 @@ export default function PoliticianDetailPage({ params: serverParamsProp }: { par
                        onClick={() => openModal({
                             fieldName: 'asset_declarations',
                             fieldLabel: 'Asset Declarations',
-                            currentValue: politician.asset_declarations, // Will be parsed by openModal
+                            currentValue: politician.asset_declarations, 
                             fieldType: 'custom',
                             editorComponent: AssetDeclarationEditor,
                             editorProps: { /* if any specific props are needed */ },
@@ -456,29 +455,6 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
     }
   };
 
-  const openMainProfileEditModal = () => {
-      if (!user) {
-          toast({
-            title: "Authentication Required",
-            description: "You need to be logged in to propose an edit.",
-            variant: "destructive",
-          });
-          return;
-      }
-      onOpenModal({
-        fieldName: 'name', 
-        fieldLabel: 'Politician Name (English)',
-        currentValue: politician.name || '',
-        fieldType: 'text',
-        politicianId: String(politician.id),
-      });
-      toast({
-          title: "Edit Profile (Placeholder)",
-          description: "This button will eventually open a comprehensive form to edit basic details. For now, it edits the name.",
-          duration: 5000,
-      });
-  };
-
   const renderHeaderField = (
     label: string,
     value?: string | number | null,
@@ -489,22 +465,27 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
     editorProps?: Record<string, any>
   ) => {
     if (value === undefined || value === null || String(value).trim() === '') {
-      return null; 
+      // If no value and no specific fieldName to enable "add" functionality, render nothing or a placeholder
+      if (!fieldName) return null; 
+      // Optionally, render a placeholder or "Add" button if fieldName is present but value is empty
+      // For now, keeping it simple: if no value, don't render the field unless it's specifically for adding new.
+      // This might need adjustment based on desired "add empty field" UX.
+      // return null; 
     }
-    const displayValue = String(value);
+    const displayValue = String(value ?? ''); // Ensure displayValue is a string
 
     return (
       <div className="relative group/field flex items-start text-sm text-gray-700 dark:text-gray-300 mb-1.5">
         {icon && React.cloneElement(icon as React.ReactElement, { className: "h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" })}
         <span className="font-semibold min-w-[100px] sm:min-w-[120px]">{label}:</span>
         <div className="ml-2 break-words flex-grow">
-          <span>{displayValue}</span>
+          <span>{displayValue || <span className="italic text-muted-foreground">Not set</span>}</span>
           {fieldName && (
             <EditButton
               onClick={() => onOpenModal({
                 fieldName: fieldName as string,
                 fieldLabel: label,
-                currentValue: politician[fieldName] || '',
+                currentValue: politician[fieldName] || '', // Use empty string if null/undefined for form
                 fieldType: fieldType,
                 editorComponent: editorComponent,
                 editorProps: editorProps,
@@ -524,7 +505,7 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
     IconComponent?: React.ElementType,
     platformName?: string
   ) => {
-    if (!value) return null;
+    if (!value && !IconComponent) return null; // If no value and no icon (for adding), render nothing
     
     let href = value || '#';
     if (platformKey === 'twitter_handle' && value) {
@@ -533,11 +514,14 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
 
     return (
       <div className="relative group/field flex items-center">
-        {IconComponent && (
+        {IconComponent && value && (
             <a href={href} target="_blank" rel="noopener noreferrer" aria-label={`Visit ${politician.name}'s ${platformName} profile`}
             className="text-muted-foreground hover:text-primary p-1 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-md transition-colors">
                 <IconComponent className="h-5 w-5" />
             </a>
+        )}
+        {IconComponent && !value && ( // Render icon for "add" if no value
+            <span className="text-muted-foreground p-1"><IconComponent className="h-5 w-5" /></span>
         )}
         <EditButton
             onClick={() => onOpenModal({
@@ -593,10 +577,13 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
                 <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-1 sm:mb-0">
                     {politician.name}
                 </h1>
+                {/* Hidden edit button for name, can be shown on hover or made part of Edit Profile Details */}
             </div>
-            <Button variant="outline" size="sm" onClick={openMainProfileEditModal} className="mt-2 sm:mt-0">
-              <Pencil className="h-4 w-4 mr-2" /> 
-              Edit Profile Details
+            <Button variant="outline" size="sm" asChild className="mt-2 sm:mt-0">
+              <Link href={`/politicians/${politician.id}/edit`}>
+                <Pencil className="h-4 w-4 mr-2" /> 
+                Edit Full Profile
+              </Link>
             </Button>
         </div>
 
@@ -661,4 +648,5 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
     </header>
   );
 }
+    
     
