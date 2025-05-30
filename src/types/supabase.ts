@@ -1146,7 +1146,7 @@ export type Database = {
           admin_feedback: string | null
           change_reason: string | null
           created_at: string | null
-          entity_id: number | null
+          entity_id: string | null
           entity_type: Database["public"]["Enums"]["entity_type"]
           id: number
           moderator_id: string | null
@@ -1159,7 +1159,7 @@ export type Database = {
           admin_feedback?: string | null
           change_reason?: string | null
           created_at?: string | null
-          entity_id?: number | null
+          entity_id?: string | null
           entity_type: Database["public"]["Enums"]["entity_type"]
           id?: number
           moderator_id?: string | null
@@ -1172,7 +1172,7 @@ export type Database = {
           admin_feedback?: string | null
           change_reason?: string | null
           created_at?: string | null
-          entity_id?: number | null
+          entity_id?: string | null
           entity_type?: Database["public"]["Enums"]["entity_type"]
           id?: number
           moderator_id?: string | null
