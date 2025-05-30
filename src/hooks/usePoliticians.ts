@@ -33,17 +33,17 @@ const fetchPoliticians = async ({
         name_nepali,
         photo_asset_id,
         public_criminal_records,
-        party_memberships!inner(
+        party_memberships!left(
             is_active,
-            parties!inner(
+            parties!left(
                 id,
                 name,
                 abbreviation
             )
         ),
-        politician_positions!inner(
+        politician_positions!left(
             is_current,
-            position_titles!inner(
+            position_titles!left(
                 id,
                 title
             )
@@ -51,17 +51,14 @@ const fetchPoliticians = async ({
       `,
       { count: 'exact' }
     )
-    .eq('party_memberships.is_active', true)
-    .eq('politician_positions.is_current', true)
-    .limit(1, { foreignTable: 'party_memberships' })
-    .limit(1, { foreignTable: 'politician_positions' })
-    .order('name', { ascending: true }) // Changed to order by name
+    .order('name', { ascending: true }) 
     .range(from, to);
 
   if (searchTerm) {
     query = query.textSearch('fts_vector', searchTerm, { type: 'plain', config: 'english' });
   }
   if (partyId && partyId.trim() !== '' && partyId !== 'all') { 
+    // This filter effectively turns the left join for party_memberships into an inner join when partyId is active.
     query = query.filter('party_memberships.parties.id', 'eq', partyId);
   }
   if (provinceId && provinceId.trim() !== '' && provinceId !== 'all') {
@@ -88,20 +85,24 @@ const fetchPoliticians = async ({
     rawPoliticians.map(async (p: any) => {
       let photoUrl: string | null = null;
       if (p.photo_asset_id) {
-         // Using client-side suitable version of getPublicUrl
         photoUrl = await getPublicUrlForMediaAsset(String(p.photo_asset_id));
       }
 
-      const activePartyMembership = p.party_memberships?.find((pm: any) => pm.is_active);
+      // Find the first active party membership that also has party details
+      const activePartyMembership = Array.isArray(p.party_memberships)
+        ? p.party_memberships.find((pm: any) => pm.is_active && pm.parties)
+        : null;
       const currentPartyName = activePartyMembership?.parties?.name || 'N/A';
       
-      const currentPosition = p.politician_positions?.find((pp: any) => pp.is_current);
+      // Find the first current position that also has position title details
+      const currentPosition = Array.isArray(p.politician_positions)
+        ? p.politician_positions.find((pp: any) => pp.is_current && pp.position_titles)
+        : null;
       const currentPositionTitle = currentPosition?.position_titles?.title || 'N/A';
       
-      // Fetch aggregate vote score from entity_votes for this politician
       const { data: votesData, error: votesError } = await supabase
         .from('entity_votes')
-        .select('vote_type') // Removed { count: 'exact' }
+        .select('vote_type')
         .eq('entity_id', p.id)
         .eq('entity_type', 'Politician');
 

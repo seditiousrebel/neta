@@ -1,7 +1,7 @@
 
 // src/app/politicians/page.tsx
 import React, { Suspense } from 'react';
-import Link from 'next/link'; // Added Link for "contribute" message
+import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { PoliticianSummary, PartyFilterOption, ProvinceFilterOption } from '@/types/entities';
 import PoliticianFilters from '@/components/politicians/PoliticianFilters';
@@ -10,7 +10,7 @@ import PaginationControls from '@/components/ui/PaginationControls';
 import { getPartyFilterOptions, getProvinceFilterOptions } from '@/lib/supabase/data';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getPublicUrlForMediaAsset } from '@/lib/supabase/storage.server';
-import { Button } from '@/components/ui/button'; // Added missing import
+import { Button } from '@/components/ui/button';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -41,17 +41,17 @@ async function fetchInitialPoliticians(
         name_nepali,
         photo_asset_id,
         public_criminal_records,
-        party_memberships!inner(
+        party_memberships!left(
             is_active,
-            parties!inner(
+            parties!left(
                 id,
                 name,
                 abbreviation
             )
         ),
-        politician_positions!inner(
+        politician_positions!left(
             is_current,
-            position_titles!inner(
+            position_titles!left(
                 id,
                 title
             )
@@ -59,17 +59,14 @@ async function fetchInitialPoliticians(
       `,
       { count: 'exact' }
     )
-    .eq('party_memberships.is_active', true)
-    .eq('politician_positions.is_current', true)
-    .limit(1, { foreignTable: 'party_memberships' })
-    .limit(1, { foreignTable: 'politician_positions' })
-    .order('created_at', { ascending: false }) 
+    .order('name', { ascending: true }) // Order by name
     .range(offset, offset + ITEMS_PER_PAGE - 1);
 
   if (searchQuery) {
     query = query.textSearch('fts_vector', searchQuery, { type: 'plain', config: 'english' });
   }
   if (partyId && partyId.trim() !== '' && partyId !== 'all') {
+    // This will effectively make the join for party_memberships an INNER join when partyId filter is applied
     query = query.filter('party_memberships.parties.id', 'eq', partyId);
   }
   if (provinceId && provinceId.trim() !== '' && provinceId !== 'all') {
@@ -108,10 +105,14 @@ async function fetchInitialPoliticians(
         photoUrl = await getPublicUrlForMediaAsset(String(p.photo_asset_id));
       }
 
-      const activePartyMembership = p.party_memberships?.find((pm: any) => pm.is_active);
+      const activePartyMembership = Array.isArray(p.party_memberships)
+        ? p.party_memberships.find((pm: any) => pm.is_active && pm.parties)
+        : null;
       const currentPartyName = activePartyMembership?.parties?.name || 'N/A';
       
-      const currentPosition = p.politician_positions?.find((pp: any) => pp.is_current);
+      const currentPosition = Array.isArray(p.politician_positions)
+        ? p.politician_positions.find((pp: any) => pp.is_current && pp.position_titles)
+        : null;
       const currentPositionTitle = currentPosition?.position_titles?.title || 'N/A';
       
       const { data: votesData, error: votesError } = await supabase
