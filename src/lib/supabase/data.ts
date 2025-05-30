@@ -1,4 +1,4 @@
-
+// src/lib/supabase/data.ts
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -20,7 +20,6 @@ export async function getPartyFilterOptions(): Promise<PartyFilterOption[]> {
 
 export async function getProvinceFilterOptions(): Promise<ProvinceFilterOption[]> {
   const supabase = createSupabaseServerClient();
-  // Assuming you have a 'provinces' table with 'id' and 'name'
   const { data, error } = await supabase
     .from('provinces')
     .select('id, name')
@@ -37,7 +36,7 @@ export async function checkIfUserFollowsEntity(userId: string, entityId: number,
   if (!userId) return false;
 
   const supabase = createSupabaseServerClient();
-  const { data, error, count } = await supabase
+  const { error, count } = await supabase
     .from('follows')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)
@@ -49,4 +48,27 @@ export async function checkIfUserFollowsEntity(userId: string, entityId: number,
     return false;
   }
   return (count || 0) > 0;
+}
+
+export async function getUserVoteForEntity(
+  userId: string,
+  entityId: number,
+  entityType: string
+): Promise<{ vote_type: number } | null> {
+  if (!userId) return null;
+
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('entity_votes')
+    .select('vote_type')
+    .eq('user_id', userId)
+    .eq('entity_id', entityId)
+    .eq('entity_type', entityType)
+    .maybeSingle(); // Use maybeSingle as user might not have voted
+
+  if (error) {
+    console.error(`Error fetching user vote for ${entityType} ${entityId}:`, error);
+    return null;
+  }
+  return data;
 }

@@ -1,10 +1,10 @@
-
+// src/hooks/usePoliticians.ts
 "use client";
 
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { PoliticianCardData, PoliticianFiltersState } from '@/types/entities';
-// import type { Database } from '@/types/supabase'; // Not strictly needed here
+import type { PoliticianSummary as PoliticianCardData, PoliticianFiltersState } from '@/types/entities';
+import { getPublicUrlForMediaAsset } from '@/lib/uploadUtils'; // Using client-side version for general media assets
 
 const ITEMS_PER_PAGE = 12;
 
@@ -29,25 +29,33 @@ const fetchPoliticians = async ({
       `
         id,
         name,
-        bio,
-        fts_vector,
+        name_nepali,
+        photo_asset_id,
         public_criminal_records,
-        media_assets ( storage_path ),
-        party_memberships (
-          is_active,
-          parties (
-            id,
-            name,
-            abbreviation,
-            media_assets:media_assets!parties_logo_asset_id_fkey ( storage_path )
-          )
+        party_memberships!inner(
+            is_active,
+            parties!inner(
+                id,
+                name,
+                abbreviation
+            )
         ),
-        politician_positions ( is_current, position_titles ( id, title ) )
+        politician_positions!inner(
+            is_current,
+            position_titles!inner(
+                id,
+                title
+            )
+        )
       `,
       { count: 'exact' }
     )
-    .range(from, to)
-    .order('name', { ascending: true });
+    .eq('party_memberships.is_active', true)
+    .eq('politician_positions.is_current', true)
+    .limit(1, { foreignTable: 'party_memberships' })
+    .limit(1, { foreignTable: 'politician_positions' })
+    .order('name', { ascending: true }) // Changed to order by name
+    .range(from, to);
 
   if (searchTerm) {
     query = query.textSearch('fts_vector', searchTerm, { type: 'plain', config: 'english' });
@@ -64,30 +72,62 @@ const fetchPoliticians = async ({
     query = query.is('public_criminal_records', null);
   }
   
-  const { data: politiciansWithoutScores, error, count } = await query;
+  const { data: rawPoliticians, error, count } = await query;
 
   if (error) {
     console.error('Error fetching politicians (client-side hook). Message:', error.message, 'Details:', error.details);
     throw new Error(error.message || 'Failed to fetch politicians');
   }
 
-   const politiciansWithScores = politiciansWithoutScores && politiciansWithoutScores.length > 0 ? await Promise.all(politiciansWithoutScores.map(async (p: any) => {
-    const { data: votes, error: voteError } = await supabase
-      .from('politician_votes')
-      .select('vote_type')
-      .eq('politician_id', p.id);
-    if (voteError) {
-      console.error(`Error fetching votes for politician ${p.id}:`, voteError);
-      return { ...p, vote_score: 0 };
-    }
-    const vote_score = votes ? votes.reduce((acc, v) => acc + v.vote_type, 0) : 0;
-    return { ...p, vote_score };
-  })) : [];
+  if (!rawPoliticians) {
+    return { data: [], nextPage: null, totalCount: 0 };
+  }
   
-  const hasMore = (from + (politiciansWithScores?.length || 0)) < (count || 0);
+  const politiciansWithDetails = await Promise.all(
+    rawPoliticians.map(async (p: any) => {
+      let photoUrl: string | null = null;
+      if (p.photo_asset_id) {
+         // Using client-side suitable version of getPublicUrl
+        photoUrl = await getPublicUrlForMediaAsset(String(p.photo_asset_id));
+      }
+
+      const activePartyMembership = p.party_memberships?.find((pm: any) => pm.is_active);
+      const currentPartyName = activePartyMembership?.parties?.name || 'N/A';
+      
+      const currentPosition = p.politician_positions?.find((pp: any) => pp.is_current);
+      const currentPositionTitle = currentPosition?.position_titles?.title || 'N/A';
+      
+      // Fetch aggregate vote score from entity_votes for this politician
+      const { data: votesData, error: votesError } = await supabase
+        .from('entity_votes')
+        .select('vote_type') // Select only vote_type for summing
+        .eq('entity_id', p.id)
+        .eq('entity_type', 'Politician');
+
+      let vote_score = 0;
+      if (votesError) {
+        console.warn(`Error fetching votes for politician ${p.id}: ${votesError.message}`);
+      } else if (votesData) {
+        vote_score = votesData.reduce((acc, vote) => acc + (vote.vote_type || 0), 0);
+      }
+
+      return {
+        id: String(p.id),
+        name: p.name,
+        name_nepali: p.name_nepali,
+        photo_url: photoUrl,
+        current_party_name: currentPartyName,
+        current_position_title: currentPositionTitle,
+        public_criminal_records: p.public_criminal_records,
+        vote_score: vote_score,
+      };
+    })
+  );
+  
+  const hasMore = (from + politiciansWithDetails.length) < (count || 0);
   
   return { 
-    data: politiciansWithScores as PoliticianCardData[], 
+    data: politiciansWithDetails, 
     nextPage: hasMore ? pageParam + 1 : null,
     totalCount: count 
   };
@@ -98,7 +138,7 @@ export const usePoliticians = (
   initialData?: { data: PoliticianCardData[], nextPage: number | null, totalCount: number | null }
 ) => {
   return useInfiniteQuery<{ data: PoliticianCardData[], nextPage: number | null, totalCount: number | null }, Error, { data: PoliticianCardData[], nextPage: number | null, totalCount: number | null }, any, number>({
-    queryKey: ['politicians', filters], // Ensure all filter keys are part of the queryKey
+    queryKey: ['politicians', filters],
     queryFn: ({ pageParam }) => fetchPoliticians({ ...filters, pageParam }),
     getNextPageParam: (lastPage) => lastPage.nextPage,
     initialPageParam: 0,

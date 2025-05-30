@@ -1,15 +1,15 @@
-
+// src/app/politicians/page.tsx
 import React, { Suspense } from 'react';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { getPublicUrlForMediaAsset } from '@/lib/supabase/storage.server';
 import type { PoliticianSummary, PartyFilterOption, ProvinceFilterOption } from '@/types/entities';
 import PoliticianFilters from '@/components/politicians/PoliticianFilters';
 import PoliticianList from '@/components/politicians/PoliticianList';
 import PaginationControls from '@/components/ui/PaginationControls';
-import { getPartyFilterOptions, getProvinceFilterOptions } from '@/lib/supabase/data'; // Import new helpers
+import { getPartyFilterOptions, getProvinceFilterOptions } from '@/lib/supabase/data';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getPublicUrlForMediaAsset } from '@/lib/supabase/storage.server';
 
-const ITEMS_PER_PAGE = 12; // Define items per page for SSR
+const ITEMS_PER_PAGE = 12;
 
 async function fetchInitialPoliticians(
   searchParams?: {
@@ -38,28 +38,36 @@ async function fetchInitialPoliticians(
         name_nepali,
         photo_asset_id,
         public_criminal_records,
-        current_party_name:party_memberships!inner(
-            parties!inner(name)
+        party_memberships!inner(
+            is_active,
+            parties!inner(
+                id,
+                name,
+                abbreviation
+            )
         ),
-        current_position_title:politician_positions!inner(
-            position_titles!inner(title)
+        politician_positions!inner(
+            is_current,
+            position_titles!inner(
+                id,
+                title
+            )
         )
       `,
       { count: 'exact' }
     )
-    .eq('party_memberships.is_active', true) // Ensure only active party membership
-    .eq('politician_positions.is_current', true) // Ensure only current position
-    .limit(1, { foreignTable: 'party_memberships' }) // Get only one active party
-    .limit(1, { foreignTable: 'politician_positions' }) // Get only one current position
-    .order('created_at', { ascending: false })
+    .eq('party_memberships.is_active', true)
+    .eq('politician_positions.is_current', true)
+    .limit(1, { foreignTable: 'party_memberships' })
+    .limit(1, { foreignTable: 'politician_positions' })
+    .order('created_at', { ascending: false }) // Consider ordering by name or relevance
     .range(offset, offset + ITEMS_PER_PAGE - 1);
-
 
   if (searchQuery) {
     query = query.textSearch('fts_vector', searchQuery, { type: 'plain', config: 'english' });
   }
   if (partyId && partyId.trim() !== '' && partyId !== 'all') {
-    query = query.filter('party_memberships.party_id', 'eq', partyId);
+    query = query.filter('party_memberships.parties.id', 'eq', partyId);
   }
   if (provinceId && provinceId.trim() !== '' && provinceId !== 'all') {
     query = query.eq('province_id', parseInt(provinceId));
@@ -80,6 +88,10 @@ async function fetchInitialPoliticians(
       'Hint:', error.hint,
       'Code:', error.code
     );
+    if (error.message.includes("column politicians.province does not exist")) {
+         console.error("Correcting: 'province' column was queried, but 'province_id' exists.");
+         // This specific error was addressed, this log is for historical context if it reappears.
+    }
     return { politicians: [], count: 0 };
   }
 
@@ -87,33 +99,33 @@ async function fetchInitialPoliticians(
     return { politicians: [], count: 0 };
   }
 
-  const politicians = await Promise.all(
+  const politiciansWithDetails = await Promise.all(
     rawPoliticians.map(async (p: any) => {
       let photoUrl: string | null = null;
       if (p.photo_asset_id) {
+        // Using server-side specific function for public URL if needed
         photoUrl = await getPublicUrlForMediaAsset(String(p.photo_asset_id));
       }
 
-      // Extract nested data correctly
-      const current_party_name = Array.isArray(p.current_party_name) && p.current_party_name.length > 0 && p.current_party_name[0].parties
-        ? p.current_party_name[0].parties.name
-        : 'N/A';
+      const activePartyMembership = p.party_memberships?.find((pm: any) => pm.is_active);
+      const currentPartyName = activePartyMembership?.parties?.name || 'N/A';
       
-      const current_position_title = Array.isArray(p.current_position_title) && p.current_position_title.length > 0 && p.current_position_title[0].position_titles
-        ? p.current_position_title[0].position_titles.title
-        : 'N/A';
+      const currentPosition = p.politician_positions?.find((pp: any) => pp.is_current);
+      const currentPositionTitle = currentPosition?.position_titles?.title || 'N/A';
       
-      // Fetch vote score
+      // Fetch aggregate vote score from entity_votes for this politician
       const { data: votesData, error: votesError } = await supabase
-        .from('politician_votes')
-        .select('vote_type', { count: 'exact' })
-        .eq('politician_id', p.id);
+        .from('entity_votes')
+        .select('vote_type', { count: 'exact' }) // count not directly used here, sum is needed
+        .eq('entity_id', p.id)
+        .eq('entity_type', 'Politician'); // Filter by entity type
 
       let vote_score = 0;
       if (votesError) {
         console.warn(`Error fetching votes for politician ${p.id}: ${votesError.message}`);
       } else if (votesData) {
-        vote_score = votesData.reduce((acc, vote) => acc + vote.vote_type, 0);
+        // Calculate sum of vote_type
+        vote_score = votesData.reduce((acc, vote) => acc + (vote.vote_type || 0), 0);
       }
 
       return {
@@ -121,17 +133,16 @@ async function fetchInitialPoliticians(
         name: p.name,
         name_nepali: p.name_nepali,
         photo_url: photoUrl,
-        current_party_name: current_party_name,
-        current_position_title: current_position_title,
+        current_party_name: currentPartyName,
+        current_position_title: currentPositionTitle,
         public_criminal_records: p.public_criminal_records,
         vote_score: vote_score,
       };
     })
   );
 
-  return { politicians, count };
+  return { politicians: politiciansWithDetails, count };
 }
-
 
 async function fetchInitialPoliticiansFilterOptions(): Promise<{
   parties: PartyFilterOption[];
@@ -141,7 +152,6 @@ async function fetchInitialPoliticiansFilterOptions(): Promise<{
   const provinces = await getProvinceFilterOptions();
   return { parties, provinces };
 }
-
 
 export default async function PoliticiansPage({
   searchParams,

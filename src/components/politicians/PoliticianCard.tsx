@@ -1,4 +1,4 @@
-
+// src/components/politicians/PoliticianCard.tsx
 "use client";
 
 import React, { useState, useEffect, useTransition } from 'react';
@@ -13,7 +13,9 @@ import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { followEntityAction, unfollowEntityAction } from '@/lib/actions/follow.actions';
-import { checkIfUserFollowsEntity } from '@/lib/supabase/data'; // Client-side check for initial status
+import { checkIfUserFollowsEntity, getUserVoteForEntity } from '@/lib/supabase/data'; // Server functions, called via useEffect or custom hook
+import { recordVoteAction } from '@/lib/actions/vote.actions';
+
 
 interface PoliticianCardProps {
   politician: PoliticianSummary;
@@ -22,59 +24,60 @@ interface PoliticianCardProps {
 const PoliticianCard: React.FC<PoliticianCardProps> = ({ politician }) => {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
-  const [isPending, startTransition] = useTransition();
+  const [isFollowPending, startFollowTransition] = useTransition();
+  const [isVotePending, startVoteTransition] = useTransition();
 
   const [isFollowed, setIsFollowed] = useState(false);
   const [isLoadingFollowStatus, setIsLoadingFollowStatus] = useState(true);
+  
   const [currentPhotoUrl, setCurrentPhotoUrl] = useState(politician.photo_url || '/placeholder-person.png');
   const [currentVoteScore, setCurrentVoteScore] = useState(politician.vote_score || 0);
-  const [userVoteStatus, setUserVoteStatus] = useState<'up' | 'down' | null>(null);
+  const [userVoteStatus, setUserVoteStatus] = useState<'up' | 'down' | null>(null); // 'up', 'down', or null
   const [isLoadingVoteStatus, setIsLoadingVoteStatus] = useState(true);
-
-  // Fetch initial follow status
-  useEffect(() => {
-    const fetchFollowStatus = async () => {
-      if (isAuthenticated && user && politician.id) {
-        setIsLoadingFollowStatus(true);
-        try {
-          const follows = await checkIfUserFollowsEntity(user.id, Number(politician.id), 'Politician');
-          setIsFollowed(follows);
-        } catch (error) {
-          console.error("Error fetching follow status:", error);
-        } finally {
-          setIsLoadingFollowStatus(false);
-        }
-      } else {
-        setIsLoadingFollowStatus(false);
-        setIsFollowed(false);
-      }
-    };
-    fetchFollowStatus();
-  }, [isAuthenticated, user, politician.id]);
-  
-  // Fetch initial vote status (Placeholder - full implementation in a later step)
-  useEffect(() => {
-    const fetchVoteStatus = async () => {
-      if (isAuthenticated && user && politician.id) {
-        setIsLoadingVoteStatus(true);
-        // TODO: Implement actual check if user has voted for this politician
-        // For now, assume no prior vote
-        // const vote = await checkIfUserVotedForPolitician(user.id, Number(politician.id));
-        // setUserVoteStatus(vote ? vote.vote_type > 0 ? 'up' : 'down' : null);
-        setIsLoadingVoteStatus(false);
-      } else {
-        setIsLoadingVoteStatus(false);
-        setUserVoteStatus(null);
-      }
-    };
-    fetchVoteStatus();
-  }, [isAuthenticated, user, politician.id]);
-
 
   useEffect(() => {
     setCurrentPhotoUrl(politician.photo_url || '/placeholder-person.png');
     setCurrentVoteScore(politician.vote_score || 0);
   }, [politician.photo_url, politician.vote_score]);
+
+  // Fetch initial follow and vote status
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchInitialStatus() {
+      if (isAuthenticated && user && politician.id && isMounted) {
+        setIsLoadingFollowStatus(true);
+        setIsLoadingVoteStatus(true);
+        try {
+          const follows = await checkIfUserFollowsEntity(user.id, Number(politician.id), 'Politician');
+          if (isMounted) setIsFollowed(follows);
+
+          const voteRecord = await getUserVoteForEntity(user.id, Number(politician.id), 'Politician');
+          if (isMounted) {
+            if (voteRecord) {
+              setUserVoteStatus(voteRecord.vote_type === 1 ? 'up' : 'down');
+            } else {
+              setUserVoteStatus(null);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching initial status:", error);
+        } finally {
+          if (isMounted) {
+            setIsLoadingFollowStatus(false);
+            setIsLoadingVoteStatus(false);
+          }
+        }
+      } else {
+        setIsLoadingFollowStatus(false);
+        setIsLoadingVoteStatus(false);
+        setIsFollowed(false);
+        setUserVoteStatus(null);
+      }
+    }
+    fetchInitialStatus();
+    return () => { isMounted = false };
+  }, [isAuthenticated, user, politician.id]);
+
 
   const handleFollowToggle = async () => {
     if (!isAuthenticated || !user) {
@@ -86,7 +89,7 @@ const PoliticianCard: React.FC<PoliticianCardProps> = ({ politician }) => {
     const newFollowState = !isFollowed;
     setIsFollowed(newFollowState); // Optimistic update
 
-    startTransition(async () => {
+    startFollowTransition(async () => {
       const action = newFollowState ? followEntityAction : unfollowEntityAction;
       const result = await action(Number(politician.id), 'Politician');
       if (!result.success) {
@@ -98,32 +101,46 @@ const PoliticianCard: React.FC<PoliticianCardProps> = ({ politician }) => {
     });
   };
   
-  const handleVote = async (voteType: 'up' | 'down') => {
+  const handleVote = async (voteDirection: 'up' | 'down') => {
     if (!isAuthenticated || !user) {
         toast({ title: "Login Required", description: "Please log in to vote.", variant: "info" });
         return;
     }
-    if (!politician.id) return;
+    if (!politician.id || isVotePending) return;
 
-    // Placeholder for voting logic
-    // This will be expanded with server actions in a future step
-    let optimisticVoteScore = currentVoteScore;
-    let optimisticUserVoteStatus = userVoteStatus;
+    let optimisticVoteScoreDelta = 0;
+    let newVoteStatusForUI: 'up' | 'down' | null = null;
+    let actionVoteDirection: 'up' | 'down' | 'none' = voteDirection;
 
-    if (userVoteStatus === voteType) { // Undoing vote
-      optimisticVoteScore += (voteType === 'up' ? -1 : 1);
-      optimisticUserVoteStatus = null;
-    } else {
-      if (userVoteStatus === 'up') optimisticVoteScore--;
-      if (userVoteStatus === 'down') optimisticVoteScore++;
-      optimisticVoteScore += (voteType === 'up' ? 1 : -1);
-      optimisticUserVoteStatus = voteType;
+    if (userVoteStatus === voteDirection) { // Undoing current vote
+      optimisticVoteScoreDelta = voteDirection === 'up' ? -1 : 1;
+      newVoteStatusForUI = null;
+      actionVoteDirection = 'none';
+    } else { // New vote or changing vote
+      if (userVoteStatus === 'up') optimisticVoteScoreDelta--; // remove old upvote
+      if (userVoteStatus === 'down') optimisticVoteScoreDelta++; // remove old downvote
+      
+      optimisticVoteScoreDelta += (voteDirection === 'up' ? 1 : -1); // add new vote
+      newVoteStatusForUI = voteDirection;
     }
     
-    setCurrentVoteScore(optimisticVoteScore);
-    setUserVoteStatus(optimisticUserVoteStatus);
-    toast({ title: "Vote (Placeholder)", description: `Vote recorded for ${politician.name}. Full logic pending.` });
-    // TODO: Implement server action to record vote
+    const previousVoteScore = currentVoteScore;
+    const previousUserVoteStatus = userVoteStatus;
+
+    setCurrentVoteScore(prev => prev + optimisticVoteScoreDelta);
+    setUserVoteStatus(newVoteStatusForUI);
+    
+    startVoteTransition(async () => {
+        const result = await recordVoteAction(Number(politician.id), 'Politician', actionVoteDirection);
+        if (!result.success) {
+            setCurrentVoteScore(previousVoteScore); // Revert optimistic update
+            setUserVoteStatus(previousUserVoteStatus); // Revert optimistic update
+            toast({ title: "Vote Error", description: result.error || "Could not record vote.", variant: "destructive" });
+        } else {
+            toast({ title: "Vote Recorded!", description: `Your vote for ${politician.name} has been recorded.` });
+            // The aggregate score will be updated on next list refresh by revalidation
+        }
+    });
   };
 
 
@@ -205,15 +222,15 @@ const PoliticianCard: React.FC<PoliticianCardProps> = ({ politician }) => {
             variant="ghost" 
             size="sm" 
             onClick={() => handleVote('up')}
-            className={cn("px-2 h-8", userVoteStatus === 'up' && "bg-green-100 text-green-600 hover:bg-green-200")}
-            disabled={isLoadingVoteStatus || isPending}
+            className={cn("px-2 h-8", userVoteStatus === 'up' && "bg-green-100 text-green-600 dark:bg-green-700/20 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-700/30")}
+            disabled={isLoadingVoteStatus || isVotePending}
             title="Upvote"
           >
-            <ArrowUp className="h-4 w-4" />
+            {isVotePending && userVoteStatus === 'up' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
           </Button>
           <span className={cn("text-sm font-medium min-w-[20px] text-center", 
-            currentVoteScore > 0 && "text-green-600",
-            currentVoteScore < 0 && "text-red-600",
+            currentVoteScore > 0 && "text-green-600 dark:text-green-400",
+            currentVoteScore < 0 && "text-red-600 dark:text-red-400",
           )}>
             {currentVoteScore}
           </span>
@@ -221,11 +238,11 @@ const PoliticianCard: React.FC<PoliticianCardProps> = ({ politician }) => {
             variant="ghost" 
             size="sm" 
             onClick={() => handleVote('down')}
-            className={cn("px-2 h-8", userVoteStatus === 'down' && "bg-red-100 text-red-600 hover:bg-red-200")}
-            disabled={isLoadingVoteStatus || isPending}
+            className={cn("px-2 h-8", userVoteStatus === 'down' && "bg-red-100 text-red-600 dark:bg-red-700/20 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-700/30")}
+            disabled={isLoadingVoteStatus || isVotePending}
             title="Downvote"
           >
-            <ArrowDown className="h-4 w-4" />
+            {isVotePending && userVoteStatus === 'down' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDown className="h-4 w-4" />}
           </Button>
         </div>
         <div className="flex items-center space-x-1">
@@ -234,11 +251,11 @@ const PoliticianCard: React.FC<PoliticianCardProps> = ({ politician }) => {
             size="sm" 
             onClick={handleFollowToggle}
             className="text-xs h-8 px-2.5"
-            disabled={isLoadingFollowStatus || isPending}
+            disabled={isLoadingFollowStatus || isFollowPending}
             title={isFollowed ? 'Unfollow' : 'Follow'}
           >
-            {isPending && isLoadingFollowStatus ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Heart className={`h-3.5 w-3.5 ${isFollowed ? "fill-red-500 text-red-500" : "text-muted-foreground"}`} />}
-            <span className="ml-1.5 hidden sm:inline">{isPending && isLoadingFollowStatus ? '...' : (isFollowed ? 'Following' : 'Follow')}</span>
+            {isFollowPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Heart className={`h-3.5 w-3.5 ${isFollowed ? "fill-red-500 text-red-500 dark:fill-red-600 dark:text-red-600" : "text-muted-foreground"}`} />}
+            <span className="ml-1.5 hidden sm:inline">{isFollowPending ? '...' : (isFollowed ? 'Following' : 'Follow')}</span>
           </Button>
           <Button variant="ghost" size="icon" onClick={handleShare} title="Share Profile" className="h-8 w-8">
             <Share2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
