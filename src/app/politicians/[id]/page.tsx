@@ -7,7 +7,8 @@ import { getPublicUrlForMediaAsset } from '@/lib/uploadUtils';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter, notFound, Link } from 'next/navigation'; // Added Link
+import { useRouter, notFound } from 'next/navigation';
+import Link from 'next/link'; // Corrected import for Link
 import { Badge } from '@/components/ui/badge';
 import {
   User, Cake, VenetianMask, Info, Twitter, Facebook, Instagram, Globe, Mail, Phone, MapPin,
@@ -649,4 +650,6 @@ function ProfileHeader({ politician, photoUrl, onOpenModal, provinceOptions }: P
   );
 }
     
+    
+
     
