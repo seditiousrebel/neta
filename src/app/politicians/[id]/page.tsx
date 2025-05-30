@@ -2,27 +2,25 @@
 "use client"; // Make this a client component
 
 // src/app/politicians/[id]/page.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, use } from 'react'; // Added use
 // Use client-side Supabase instance for client-side fetching
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { getPublicUrlForMediaAsset } from '@/lib/uploadUtils';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/auth-context';
-import { useToast } from '@/hooks/use-toast'; // Corrected import path
-import { useRouter, notFound } from 'next/navigation'; // Removed useParams, added notFound
+import { useToast } from '@/hooks/use-toast'; 
+import { useRouter, notFound } from 'next/navigation'; 
 import { Badge } from '@/components/ui/badge';
 import {
   User, Cake, VenetianMask, Info, Twitter, Facebook, Instagram, Globe, Mail, Phone, MapPin,
-  Heart, Share2, AlertTriangle // Added new icons
+  Heart, Share2, AlertTriangle 
 } from 'lucide-react';
-// import { notFound, useParams } from 'next/navigation'; // useParams removed
 import type { PoliticianFormData } from '@/components/contribute/PoliticianForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button'; // Added Button
+import { Button } from '@/components/ui/button'; 
 import Overview from '@/components/politicians/profile/Overview';
-// import CareerTimeline from '@/components/politicians/profile/CareerTimeline'; // Original one
-import CareerTimeline from '@/components/politicians/detail/CareerTimeline'; // Corrected path from detail folder
+import CareerTimeline from '@/components/politicians/detail/CareerTimeline'; 
 import CriminalRecords from '@/components/politicians/profile/CriminalRecords';
 // Import EditModal and EditButton
 import { EditModal, EditModalProps, FieldType as ModalFieldType, EditorProps } from '@/components/wiki/EditModal';
@@ -52,8 +50,9 @@ interface ModalContentData {
 }
 
 // PoliticianProfilePage - Main Component
-export default function PoliticianDetailPage({ params: serverParams }: { params: { id: string } }) {
-  const id = serverParams.id; // Directly use serverParams.id
+export default function PoliticianDetailPage({ params: serverParamsProp }: { params: { id: string } }) {
+  const serverParams = use(serverParamsProp); // Unwrap potential Promise
+  const id = serverParams.id; 
 
   const { user } = useAuth();
   const { toast } = useToast();
@@ -743,6 +742,4 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
     </header>
   );
 }
-    
-
     
