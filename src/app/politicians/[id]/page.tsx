@@ -43,8 +43,8 @@ interface ModalContentData {
 }
 
 export default function PoliticianDetailPage({ params: serverParamsProp }: { params: { id: string } }) {
-  const serverParams = use(serverParamsProp); 
-  const id = serverParams.id; 
+  const resolvedServerParams = use(serverParamsProp); 
+  const id = resolvedServerParams.id; 
 
   const { user } = useAuth();
   const { toast } = useToast();
@@ -384,8 +384,6 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
   const { toast } = useToast();
   const [isFollowed, setIsFollowed] = useState(false); 
   const supabase = createSupabaseBrowserClient(); // For fetching party logo URL client-side
-
-  const resolvedParams = use(serverParams); // This line seems to be a leftover from a merge and is incorrect here. serverParams is not defined in this scope.
                                         // For ProfileHeader, we directly use the politician prop.
 
   const [partyLogoUrl, setPartyLogoUrl] = useState<string | null>(null);
@@ -620,3 +618,5 @@ function ProfileHeader({ politician, photoUrl, onOpenModal }: ProfileHeaderProps
     </header>
   );
 }
+
+    
