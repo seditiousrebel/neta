@@ -35,7 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .maybeSingle();
 
     if (error) {
-      console.error('Error fetching user profile:', error.message);
+      console.error('[AuthContext] Error fetching user profile from DB:', error.message);
       return null;
     }
     return data;
@@ -45,7 +45,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     if (session?.user) {
       const authUser = session.user;
+      console.log('[AuthContext] Processing session for authUser ID:', authUser.id);
       const userProfile = await fetchUserProfile(authUser.id);
+      console.log('[AuthContext] Fetched userProfile from DB:', userProfile); // Diagnostic log
 
       const appUser: User = {
         id: authUser.id,
@@ -58,7 +60,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       };
       setUser(appUser);
       setIsAuthenticated(true);
-      console.log('[AuthContext] Processed User State:', appUser); // Diagnostic log
+      console.log('[AuthContext] Set appUser in context:', appUser); // Diagnostic log
+      console.log('[AuthContext] Effective role set in context:', appUser.role); // Specifically log the role
     } else {
       setUser(null);
       setIsAuthenticated(false);
@@ -72,23 +75,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: SupabaseSession | null) => {
-        console.log('[AuthContext] Auth event:', event); // Diagnostic log
+        console.log('[AuthContext] Auth event received:', event, 'Session present:', !!session); // Diagnostic log
         await processSession(session);
          if (event === 'SIGNED_IN') {
+           console.log('[AuthContext] Event SIGNED_IN processed.');
         } else if (event === 'SIGNED_OUT') {
+           console.log('[AuthContext] Event SIGNED_OUT processed.');
         } else if (event === 'USER_UPDATED') {
+           console.log('[AuthContext] Event USER_UPDATED received.');
            if (session?.user) await processSession(session);
         }
       }
     );
 
     const getInitialSession = async () => {
+      console.log('[AuthContext] Getting initial session...');
       const { data: { session } } = await supabase.auth.getSession();
+      console.log('[AuthContext] Initial session data:', session ? `User ID: ${session.user.id}` : 'No session');
       await processSession(session);
     };
     getInitialSession();
 
     return () => {
+      console.log('[AuthContext] Unsubscribing from auth state changes.');
       subscription?.unsubscribe();
     };
   }, [supabase, processSession]);
@@ -96,13 +105,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     setIsLoading(true);
+    console.log('[AuthContext] Initiating logout...');
     const { error } = await supabase.auth.signOut();
     if (error) {
-      console.error('Logout error:', error.message);
+      console.error('[AuthContext] Logout error:', error.message);
       toast({ title: "Logout Failed", description: error.message, variant: "destructive" });
+    } else {
+      console.log('[AuthContext] Logout successful.');
     }
-    // setUser(null); // processSession will handle this via onAuthStateChange
-    // setIsAuthenticated(false);
+    // processSession will handle setting user to null via onAuthStateChange SIGNED_OUT event
     setIsLoading(false);
   };
 
@@ -126,3 +137,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
