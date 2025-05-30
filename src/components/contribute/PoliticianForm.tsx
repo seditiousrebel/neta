@@ -1,8 +1,8 @@
 // src/components/contribute/PoliticianForm.tsx
 "use client"; // Required for Next.js App Router client components
 
-import React from 'react';
-import { useForm } from 'react-hook-form';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 // import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // Not used in final example, Select is used
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import PhotoUpload from '@/components/upload/PhotoUpload'; // Adjust path as needed
+
+const LOCAL_STORAGE_KEY = 'politicianFormDraft_v1';
 
 // Zod Schema for validation
 const politicianFormSchema = z.object({
@@ -41,30 +43,138 @@ const politicianFormSchema = z.object({
 export type PoliticianFormData = z.infer<typeof politicianFormSchema>;
 
 interface PoliticianFormProps {
-  onSubmit: (data: PoliticianFormData) => void;
+  onSubmit: (data: PoliticianFormData) => Promise<void>; // Adjusted for async nature of submission
   isLoading?: boolean;
   defaultValues?: Partial<PoliticianFormData>;
 }
 
 const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, defaultValues }) => {
+  const [draftSaveStatus, setDraftSaveStatus] = useState<string>('');
+
   const form = useForm<PoliticianFormData>({
     resolver: zodResolver(politicianFormSchema),
-    defaultValues: {
-      ...defaultValues,
-      contact_information: defaultValues?.contact_information || { email: '', phone: '', address: '' },
-      social_media_handles: defaultValues?.social_media_handles || { twitter: '', facebook: '', instagram: '' },
-    },
+    defaultValues: defaultValues || {}, // Initialize with defaultValues directly
   });
+
+  // Load draft from localStorage on component mount
+  useEffect(() => {
+    const savedDraft = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (savedDraft) {
+      try {
+        const draftData = JSON.parse(savedDraft);
+        form.reset(draftData); // Populate form with draft data
+        setDraftSaveStatus("Draft loaded from last session.");
+        setTimeout(() => setDraftSaveStatus(''), 3000);
+      } catch (error) {
+        console.error("Error parsing saved draft:", error);
+        localStorage.removeItem(LOCAL_STORAGE_KEY); // Clear corrupted draft
+      }
+    }
+  }, [form]); // form instance is a dependency
+
+  // Debounce function
+  const debounce = <F extends (...args: any[]) => any>(func: F, delay: number) => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    return (...args: Parameters<F>) => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      timeoutId = setTimeout(() => {
+        func(...args);
+      }, delay);
+    };
+  };
+
+  // Watch for form changes and save to localStorage (debounced)
+  const watchedValues = useWatch({ control: form.control }); // Watch all fields
+
+  const saveDraft = useCallback(debounce((data: PoliticianFormData) => {
+    try {
+      const VITE_USER_ID = import.meta.env.VITE_USER_ID || 'default_user'; // Example: include user ID if available
+      const draftKeyWithUser = `${LOCAL_STORAGE_KEY}_${VITE_USER_ID}`;
+      localStorage.setItem(draftKeyWithUser, JSON.stringify(data));
+      const time = new Date().toLocaleTimeString();
+      setDraftSaveStatus(`Draft saved at ${time}`);
+      setTimeout(() => setDraftSaveStatus(''), 3000); // Clear status after 3s
+    } catch (error) {
+      console.error("Error saving draft:", error);
+      setDraftSaveStatus("Error saving draft.");
+      setTimeout(() => setDraftSaveStatus(''), 3000);
+    }
+  }, 1500), [form.getValues]); // Recreate debounce if getValues changes (should be stable)
+
+  useEffect(() => {
+    if (form.formState.isDirty) { // Only save if form has been changed
+      saveDraft(watchedValues as PoliticianFormData);
+    }
+  }, [watchedValues, saveDraft, form.formState.isDirty]);
+
 
   const handlePhotoUploaded = (assetId: string) => {
     form.setValue('photo_asset_id', assetId, { shouldValidate: true, shouldDirty: true });
   };
 
+  const handleFormSubmit = async (data: PoliticianFormData) => {
+    await onSubmit(data); // Call the original submit handler
+    try {
+      const VITE_USER_ID = import.meta.env.VITE_USER_ID || 'default_user';
+      const draftKeyWithUser = `${LOCAL_STORAGE_KEY}_${VITE_USER_ID}`;
+      localStorage.removeItem(draftKeyWithUser); // Clear draft on successful submission
+      setDraftSaveStatus("Form submitted and draft cleared!");
+      setTimeout(() => setDraftSaveStatus(''), 3000);
+      form.reset(defaultValues || {}); // Reset form to default (or empty)
+    } catch (error) {
+      console.error("Error clearing draft:", error);
+    }
+  };
+  
+  const clearDraftManually = () => {
+    try {
+      const VITE_USER_ID = import.meta.env.VITE_USER_ID || 'default_user';
+      const draftKeyWithUser = `${LOCAL_STORAGE_KEY}_${VITE_USER_ID}`;
+      localStorage.removeItem(draftKeyWithUser);
+      form.reset(defaultValues || {}); // Reset form to initial state
+      setDraftSaveStatus("Draft cleared manually.");
+      setTimeout(() => setDraftSaveStatus(''), 3000);
+    } catch (error) {
+      console.error("Error clearing draft manually:", error);
+      setDraftSaveStatus("Error clearing draft.");
+      setTimeout(() => setDraftSaveStatus(''), 3000);
+    }
+  };
+
+  // Ensure defaultValues for nested fields are handled if not provided
+   useEffect(() => {
+    const currentValues = form.getValues();
+    const newDefaultValues = {
+      ...defaultValues,
+      contact_information: defaultValues?.contact_information || { email: '', phone: '', address: '' },
+      social_media_handles: defaultValues?.social_media_handles || { twitter: '', facebook: '', instagram: '' },
+    };
+    // Only reset if defaultValues prop changes and there's no current user input (isDirty)
+    // or if there's no draft loaded from localStorage
+    if (!localStorage.getItem(LOCAL_STORAGE_KEY) && !form.formState.isDirty) {
+       form.reset(newDefaultValues);
+    }
+   }, [defaultValues, form]);
+
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-8">
+        {/* Draft Save Status Message */}
+        {draftSaveStatus && (
+          <div className="text-sm text-gray-500 dark:text-gray-400 p-2 bg-gray-100 dark:bg-gray-800 rounded-md">
+            {draftSaveStatus}
+          </div>
+        )}
         {/* Basic Info Section */}
-        <h2 className="text-xl font-semibold border-b pb-2">Basic Information</h2>
+        <div className="flex justify-between items-center border-b pb-2">
+          <h2 className="text-xl font-semibold">Basic Information</h2>
+          <Button type="button" variant="outline" size="sm" onClick={clearDraftManually}>
+            Clear Saved Draft
+          </Button>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <FormField
             control={form.control}
@@ -151,7 +261,7 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
             <FormItem>
               <FormLabel>Detailed Biography</FormLabel>
               <FormControl><Textarea placeholder="Enter detailed biography..." {...field} rows={5} /></FormControl>
-              <FormDescription>Supports plain text. Future enhancements could include rich text (Markdown).</FormDescription>
+              <FormDescription>Supports Markdown for rich text formatting. Use asterisks for bold/italics, hashes for headings, etc.</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -286,7 +396,7 @@ const PoliticianForm: React.FC<PoliticianFormProps> = ({ onSubmit, isLoading, de
           />
         </div>
         
-        <Button type="submit" disabled={isLoading} className="mt-8">
+        <Button type="submit" disabled={isLoading || !form.formState.isDirty || !!Object.keys(form.formState.errors).length} className="mt-8">
           {isLoading ? 'Submitting...' : 'Submit Politician Data'}
         </Button>
       </form>
