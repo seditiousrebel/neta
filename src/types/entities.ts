@@ -5,7 +5,7 @@ export interface User {
   email?: string | null;
   avatarUrl?: string | null;
   bio?: string | null;
-  role?: "User" | "Admin" | "Super Admin" | string | null; // Added Super Admin
+  role?: "User" | "Admin" | string | null; // Changed from "Super Admin"
   contributionPoints?: number | null;
 }
 

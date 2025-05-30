@@ -1,3 +1,4 @@
+
 // src/app/admin/layout.tsx
 "use client"; // Make this a client component
 
@@ -37,7 +38,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             {authLoading ? (
               <p className="text-sm font-semibold text-accent animate-pulse">Loading...</p>
             ) : (
-              <Badge variant={user?.role === 'Super Admin' ? "destructive" : "secondary"} className="text-sm mt-1">
+              <Badge variant={user?.role === 'Admin' ? "destructive" : "secondary"} className="text-sm mt-1"> {/* CHANGED Super Admin to Admin */}
                 {user?.role || 'N/A'}
               </Badge>
             )}

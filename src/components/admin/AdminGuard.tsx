@@ -26,7 +26,7 @@ export function AdminGuard({ children }: AdminGuardProps) {
             variant: "destructive",
         });
         router.push('/auth/login?next=/admin');
-      } else if (user?.role !== 'Super Admin') { // <<< CHANGED 'Admin' to 'Super Admin'
+      } else if (user?.role !== 'Admin') { // <<< CHANGED BACK to 'Admin'
         toast({
             title: "Access Denied",
             description: "You do not have permission to view this page.",
@@ -37,7 +37,7 @@ export function AdminGuard({ children }: AdminGuardProps) {
     }
   }, [isAuthenticated, isLoading, user, router, toast]);
 
-  if (isLoading || !isAuthenticated || user?.role !== 'Super Admin') { // <<< CHANGED 'Admin' to 'Super Admin'
+  if (isLoading || !isAuthenticated || user?.role !== 'Admin') { // <<< CHANGED BACK to 'Admin'
     // Show a loading skeleton or a generic access verification message
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">

@@ -37,13 +37,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     if (error) {
       console.error(`[AuthContext] fetchUserProfile: Error fetching profile from DB for user ${userId}. Message: ${error.message}. Details: ${error.details || 'No details'}. Code: ${error.code || 'No code'}. Hint: ${error.hint || 'No hint'}.`);
-      if (error.message.includes('relation "users" does not exist') || error.message.includes('permission denied')) {
-          console.error("[AuthContext] RLS_POLICY_ISSUE: The error strongly suggests a Row Level Security policy is blocking access to the 'users' table or specific rows/columns, or the table itself is not found/accessible by the authenticated user's role.");
+      if (error.message.includes('relation "users" does not exist') || error.message.includes('permission denied for table users')) {
+          console.error("[AuthContext] RLS_POLICY_ISSUE: The error strongly suggests a Row Level Security policy is blocking access to the 'users' table or specific rows/columns, or the table itself is not found/accessible by the authenticated user's role. Ensure RLS is enabled and a policy allows 'authenticated' users to SELECT their own row (e.g., USING (auth.uid() = id)).");
       }
       return null;
     }
     if (!data) {
-      console.warn(`[AuthContext] fetchUserProfile: No user profile found in 'users' table for userId: ${userId}. This is often due to RLS policies preventing access, or the user record does not exist in 'public.users' with a matching ID column.`);
+      console.warn(`[AuthContext] fetchUserProfile: No user profile found in DB for user ${userId}. This could be due to RLS policies or the user record not existing in 'public.users'.`);
       return null;
     }
     console.log(`[AuthContext] fetchUserProfile: Successfully fetched profile for userId ${userId}:`, JSON.stringify(data, null, 2));
@@ -58,7 +58,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log('[AuthContext] authUser.user_metadata:', JSON.stringify(authUser.user_metadata, null, 2));
 
       const userProfile = await fetchUserProfile(authUser.id);
-      // Log explicitly happens inside fetchUserProfile now
       // console.log('[AuthContext] Fetched userProfile from DB:', userProfile ? JSON.stringify(userProfile, null, 2) : null);
 
 
@@ -68,6 +67,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log(`[AuthContext] Role from DB profile (userProfile?.role): ${roleFromProfile}`);
       console.log(`[AuthContext] Role from auth metadata (authUser.user_metadata?.role): ${roleFromMetadata}`);
 
+      // Prioritize role from DB profile, then from auth metadata, then default to 'User'
       const finalRole = roleFromProfile || roleFromMetadata || 'User';
       console.log(`[AuthContext] Determined finalRole: ${finalRole}`);
 
@@ -77,7 +77,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email: authUser.email,
         name: userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
         avatarUrl: userProfile?.avatar_url || authUser.user_metadata?.avatar_url || `https://placehold.co/100x100.png?text=${(userProfile?.full_name || authUser.user_metadata?.full_name || authUser.email || 'U').charAt(0).toUpperCase()}`,
-        role: finalRole as "User" | "Admin" | "Super Admin" | string,
+        role: finalRole as "User" | "Admin" | string, // Adjusted to allow "Admin" as a primary type
         contributionPoints: userProfile?.contribution_points || 0,
         bio: userProfile?.bio || (authUser.user_metadata?.bio as string) || null,
       };
