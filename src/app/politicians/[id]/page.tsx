@@ -1,209 +1,205 @@
-
+// src/app/politicians/[id]/page.tsx
+import React from 'react';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { DetailedPolitician, PoliticianCareerEntry } from '@/types/entities'; // Ensure PoliticianCareerEntry is imported
+import { getPublicUrlForMediaAsset } from '@/lib/supabase/storage.server.ts';
 import Image from 'next/image';
-import { notFound } from 'next/navigation';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { User, Briefcase, Landmark, Mail, Phone, Twitter, Facebook, Layers, FileText, CalendarDays, Target, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { User, Cake, VenetianMask, Info, Twitter, Facebook, Instagram, Globe, Mail, Phone, MapPin } from 'lucide-react'; 
+import { notFound } from 'next/navigation'; 
+import type { PoliticianFormData } from '@/components/contribute/PoliticianForm'; 
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; 
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
+import Overview from '@/components/politicians/profile/Overview';
+import CareerTimeline from '@/components/politicians/profile/CareerTimeline';
+import CriminalRecords from '@/components/politicians/profile/CriminalRecords';
 
-import ProfileHeader from '@/components/politicians/detail/ProfileHeader';
-import CurrentPosition from '@/components/politicians/detail/CurrentPosition';
-import PartyAffiliation from '@/components/politicians/detail/PartyAffiliation';
-import ContactInfo from '@/components/politicians/detail/ContactInfo';
-import SocialMediaLinks from '@/components/politicians/detail/SocialMediaLinks';
-import CareerTimeline from '@/components/politicians/detail/CareerTimeline';
-import VotingHistory from '@/components/politicians/detail/VotingHistory';
-import PromisesSection from '@/components/politicians/detail/PromisesSection';
 
-async function getPoliticianDetails(id: string): Promise<DetailedPolitician | null> {
-  const supabase = createSupabaseServerClient();
-  
-  const mainQueryFields = `
-      id,
-      name,
-      name_nepali,
-      is_independent,
-      dob,
-      gender,
-      bio,
-      education,
-      political_journey,
-      public_criminal_records,
-      asset_declarations,
-      twitter_handle,
-      facebook_profile_url,
-      contact_email,
-      contact_phone,
-      permanent_address,
-      current_address,
-      province_id,
-      created_at,
-      updated_at,
-      media_assets ( storage_path ),
-      party_memberships (
-        *,
-        parties (
-          *,
-          logo:media_assets!parties_logo_asset_id_fkey ( storage_path )
-        )
-      ),
-      politician_positions (
-        *,
-        position_titles ( * )
-      ),
-      bill_votes!politician_id ( *, legislative_bills ( * ) ),
-      promises!politician_id ( * )
-  `;
-
-  const fullQueryFields = `${mainQueryFields}, politician_career_entries!politician_id ( * )`;
-
-  let { data: politicianData, error } = await supabase
-    .from('politicians')
-    .select(fullQueryFields)
-    .eq('id', id)
-    .maybeSingle<DetailedPolitician>();
-
-  if (error) {
-    console.error('Error fetching politician details (initial attempt):', error.message, error.details);
-    // Check if the error is specifically about 'politician_career_entries' relationship
-    if (error.message.includes("Could not find a relationship between 'politicians' and 'politician_career_entries'")) {
-      console.warn("Fallback: Retrying query without 'politician_career_entries' due to relationship error.");
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from('politicians')
-        .select(mainQueryFields) // Query without politician_career_entries
-        .eq('id', id)
-        .maybeSingle<Omit<DetailedPolitician, 'politician_career_entries'>>();
-
-      if (fallbackError) {
-        console.error('Error fetching politician details (fallback attempt):', fallbackError.message, fallbackError.details);
-        return null;
-      }
-      if (fallbackData) {
-        // Attempt to fetch career entries separately
-        const { data: careerEntries, error: careerError } = await supabase
-          .from('politician_career_entries')
-          .select('*')
-          .eq('politician_id', id);
-
-        if (careerError) {
-          console.warn("Could not fetch career entries separately:", careerError.message);
-        }
-        // Merge results
-        politicianData = {
-          ...fallbackData,
-          politician_career_entries: (careerEntries as PoliticianCareerEntry[] | null) || [], // Ensure it's an array
-        };
-        // Clear the original error since we have fallback data
-        error = null; 
-      } else {
-        return null; // Politician not found even with fallback
-      }
-    } else {
-      return null; // Different error, return null
-    }
-  }
-  return politicianData || null; // return data if no error or if fallback succeeded
+export interface PoliticianProfileData extends PoliticianFormData {
+  id: string; 
+  created_at?: string;
+  updated_at?: string;
+  status?: string; 
 }
 
-export default async function PoliticianDetailPage({ params }: { params: { id: string } }) {
-  const politicianId = params.id;
-  if (!/^\d+$/.test(politicianId)) {
-    console.error(`Invalid politician ID format: ${politicianId}`);
-    notFound();
+
+async function fetchPoliticianById(id: string): Promise<{ politician: PoliticianProfileData | null; photoUrl: string | null }> {
+  const supabase = createSupabaseServerClient();
+  
+  const { data, error } = await supabase
+    .from('politicians')
+    .select('*') 
+    .eq('id', id)
+    .eq('status', 'Approved') 
+    .single();
+
+  if (error) {
+    console.error(`Error fetching politician with ID ${id}: ${error.message}`);
+    if (error.code === 'PGRST116') { // Code for "No rows found" with .single()
+        notFound();
+    }
+    // For other errors, we might not want to show a 404 but an error message,
+    // but for this page, notFound() is generally appropriate if data can't be fetched.
+    return { politician: null, photoUrl: null }; 
   }
   
-  const politician = await getPoliticianDetails(politicianId);
-
-  if (!politician) {
+  if (!data) { 
     notFound();
   }
 
+  const politician = data as PoliticianProfileData;
+  politician.id = String(data.id); 
+
+  let photoUrl: string | null = null;
+  if (politician.photo_asset_id) {
+    photoUrl = await getPublicUrlForMediaAsset(politician.photo_asset_id);
+  }
+
+  return { politician, photoUrl };
+}
+
+export default async function PoliticianProfilePage({ params }: { params: { id: string } }) {
+  const { id } = params;
+  const { politician, photoUrl } = await fetchPoliticianById(id);
+
+  if (!politician) {
+    // This should ideally be caught by notFound() in fetchPoliticianById,
+    // but as a safeguard:
+    notFound();
+  }
+
+  const renderField = (label: string, value?: string | number | null, icon?: React.ReactNode, isLink: boolean = false) => {
+    if (value === undefined || value === null || String(value).trim() === '') return null;
+    return (
+      <div className="flex items-start text-sm text-gray-700 dark:text-gray-300 mb-1.5">
+        {icon && React.cloneElement(icon as React.ReactElement, { className: "h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0"})}
+        <span className="font-semibold min-w-[100px] sm:min-w-[120px]">{label}:</span>
+        {isLink && typeof value === 'string' ? (
+            <a href={value.startsWith('http') ? value : `mailto:${value}`} target="_blank" rel="noopener noreferrer" className="ml-2 hover:underline text-primary dark:text-blue-400 break-all">
+                {value}
+            </a>
+        ) : (
+            <span className="ml-2 break-words">{String(value)}</span>
+        )}
+      </div>
+    );
+  };
+  
+  const renderSocialLink = (platformKey: keyof NonNullable<PoliticianFormData['social_media_handles']>, url?: string | null) => {
+    if (!url) return null;
+    let IconComponent: React.ElementType = Globe; 
+    let platformName = platformKey.charAt(0).toUpperCase() + platformKey.slice(1);
+
+    switch (platformKey) {
+        case 'twitter': IconComponent = Twitter; platformName="Twitter"; break;
+        case 'facebook': IconComponent = Facebook; platformName="Facebook"; break;
+        case 'instagram': IconComponent = Instagram; platformName="Instagram"; break;
+    }
+    return (
+        <a href={url} target="_blank" rel="noopener noreferrer" aria-label={`Visit ${politician.name}'s ${platformName} profile`}
+           className="text-muted-foreground hover:text-primary p-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-md transition-colors">
+            <IconComponent className="h-5 w-5" />
+        </a>
+    );
+  };
+
   return (
-    <div className="space-y-8">
-      <ProfileHeader politician={politician} />
+    <div className="container mx-auto p-4 py-8 md:py-12 max-w-5xl">
+      <header className="flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8 mb-8 pb-8 border-b border-gray-200 dark:border-gray-700">
+        <div className="relative w-36 h-36 md:w-48 md:h-48 rounded-full overflow-hidden shadow-xl border-4 border-white dark:border-gray-800 flex-shrink-0">
+          {photoUrl ? (
+            <Image
+              src={photoUrl}
+              alt={`Photo of ${politician.name}`}
+              fill
+              sizes="(max-width: 768px) 144px, 192px"
+              className="object-cover"
+              priority 
+              onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder-person.png'; }} // Fallback for client-side error
+            />
+          ) : (
+            <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center rounded-full">
+              <User className="w-24 h-24 text-gray-400 dark:text-gray-500" />
+            </div>
+          )}
+        </div>
+        <div className="text-center md:text-left pt-2 flex-grow">
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight">{politician.name}</h1>
+          {politician.name_nepali && (
+            <p className="text-xl text-muted-foreground dark:text-gray-400 mt-1">{politician.name_nepali}</p>
+          )}
+          <div className="mt-4 space-y-1.5">
+            {renderField("Date of Birth (BS)", politician.dob, <Cake />)}
+            {renderField("Gender", politician.gender, <VenetianMask />)}
+            {politician.contact_information?.email && renderField("Email", politician.contact_information.email, <Mail />, true)}
+            {politician.contact_information?.phone && renderField("Phone", politician.contact_information.phone, <Phone />)}
+            {politician.contact_information?.address && renderField("Address", politician.contact_information.address, <MapPin />)}
+          </div>
+          {(politician.social_media_handles && Object.values(politician.social_media_handles).some(h => h)) && (
+            <div className="mt-5 flex items-center justify-center md:justify-start space-x-1"> {/* Reduced space for social icons */}
+                {Object.entries(politician.social_media_handles)
+                    .filter(([,url]) => url)
+                    .map(([platform, url]) => renderSocialLink(platform as keyof PoliticianFormData['social_media_handles'], url))}
+            </div>
+          )}
+        </div>
+      </header>
 
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-6">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="career">Career</TabsTrigger>
-          <TabsTrigger value="voting">Voting Record</TabsTrigger>
-          <TabsTrigger value="promises">Promises</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center"><Briefcase className="mr-2 h-5 w-5 text-primary" /> Current Role & Affiliation</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <CurrentPosition positions={politician.politician_positions ?? []} />
-              <PartyAffiliation partyMemberships={politician.party_memberships ?? []} />
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center"><User className="mr-2 h-5 w-5 text-primary" /> About</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <p className="text-muted-foreground whitespace-pre-wrap">
-                    {politician.bio || "No biography available."}
-                </p>
-                {politician.education && <p className="mt-2 text-sm"><strong>Education:</strong> {politician.education}</p>}
-                {politician.political_journey && <p className="mt-2 text-sm"><strong>Political Journey:</strong> {politician.political_journey}</p>}
-            </CardContent>
-          </Card>
-
-          {(politician.contact_email || politician.contact_phone || politician.twitter_handle || politician.facebook_profile_url) && (
-            <Card>
+      {/* Biography section removed, will be handled by Overview component in its tab */}
+      
+      <div className="mt-10">
+        <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200 text-center">Detailed Information</h2>
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-1 mb-6 bg-gray-100 dark:bg-gray-800/40 p-1 rounded-md">
+            <TabsTrigger value="overview" className="text-xs sm:text-sm">Overview</TabsTrigger>
+            <TabsTrigger value="career" className="text-xs sm:text-sm">Career</TabsTrigger>
+            <TabsTrigger value="criminal_records" className="text-xs sm:text-sm">Criminal Records</TabsTrigger>
+            <TabsTrigger value="assets" className="text-xs sm:text-sm">Assets</TabsTrigger>
+            <TabsTrigger value="voting_record" className="text-xs sm:text-sm">Voting Record</TabsTrigger>
+            <TabsTrigger value="edit_history" className="text-xs sm:text-sm">Edit History</TabsTrigger>
+          </TabsList>
+          <TabsContent value="overview">
+            <Card className="shadow-sm">
               <CardHeader>
-                <CardTitle className="flex items-center"><Mail className="mr-2 h-5 w-5 text-primary" /> Contact & Social</CardTitle>
+                <CardTitle>Overview</CardTitle>
+                <CardDescription>A summary including biography and current political engagement.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <ContactInfo email={politician.contact_email} phone={politician.contact_phone} />
-                <SocialMediaLinks twitterHandle={politician.twitter_handle} facebookProfileUrl={politician.facebook_profile_url} />
+              <CardContent className="pt-6">
+                <Overview 
+                  biography={politician.biography} 
+                  politicalJourney={politician.political_journey}
+                  currentPosition={politician.current_position_title}
+                  currentParty={politician.current_party_name}
+                />
               </CardContent>
             </Card>
-          )}
-          
-          {politician.public_criminal_records && (
-             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center text-destructive"><AlertCircle className="mr-2 h-5 w-5" /> Public Criminal Records</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Note</AlertTitle>
-                        <AlertDescription className="whitespace-pre-wrap">
-                            {politician.public_criminal_records}
-                        </AlertDescription>
-                    </Alert>
-                </CardContent>
+          </TabsContent>
+          <TabsContent value="career">
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle>Career Timeline</CardTitle>
+                <CardDescription>A chronological overview of their political journey and roles held.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <CareerTimeline politicalJourney={politician.political_journey} />
+              </CardContent>
             </Card>
-          )}
-
-        </TabsContent>
-
-        <TabsContent value="career">
-          <CareerTimeline careerEntries={politician.politician_career_entries ?? []} positions={politician.politician_positions ?? []} />
-        </TabsContent>
-
-        <TabsContent value="voting">
-          <VotingHistory billVotes={politician.bill_votes ?? []} />
-        </TabsContent>
-
-        <TabsContent value="promises">
-          <PromisesSection promises={politician.promises ?? []} />
-        </TabsContent>
-      </Tabs>
-      <p className="text-xs text-muted-foreground text-center mt-8">
-        Real-time updates are not yet implemented. Data is current as of last page load.
-      </p>
+          </TabsContent>
+          <TabsContent value="criminal_records">
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle>Criminal Records</CardTitle>
+                <CardDescription>Information related to any reported criminal records for this individual.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <CriminalRecords criminalRecordsData={politician.criminal_records} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="assets"><Card className="shadow-sm"><CardHeader><CardTitle>Asset Declarations</CardTitle></CardHeader><CardContent><p className="text-muted-foreground italic py-4">Asset declaration information will appear here.</p></CardContent></Card></TabsContent>
+          <TabsContent value="voting_record"><Card className="shadow-sm"><CardHeader><CardTitle>Voting Record</CardTitle></CardHeader><CardContent><p className="text-muted-foreground italic py-4">Voting record details will appear here (if applicable).</p></CardContent></Card></TabsContent>
+          <TabsContent value="edit_history"><Card className="shadow-sm"><CardHeader><CardTitle>Edit History</CardTitle></CardHeader><CardContent><p className="text-muted-foreground italic py-4">History of changes to this profile will appear here.</p></CardContent></Card></TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }
-
-    
