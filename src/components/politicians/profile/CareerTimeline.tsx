@@ -1,90 +1,126 @@
+
 // src/components/politicians/profile/CareerTimeline.tsx
 import React from 'react';
-import { Briefcase } from 'lucide-react'; 
-
-interface JourneyItem {
-  position: string;
-  party?: string | null;
-  startDate: string; 
-  endDate?: string | null;
-  description?: string | null;
-}
+import { Briefcase, GraduationCap, Milestone } from 'lucide-react';
+import type { CareerJourneyEntry, PoliticianPosition } from '@/types/entities';
 
 interface CareerTimelineProps {
-  politicalJourney?: JourneyItem[] | string | null;
+  politicalJourney?: CareerJourneyEntry[] | string | null;
+  positions?: PoliticianPosition[] | null;
 }
 
-const formatDate = (dateString?: string | null): string => {
-  if (!dateString) return 'Present';
+interface TimelineItem {
+  id: string;
+  type: 'journey' | 'position';
+  date: Date;
+  title: string;
+  subtitle?: string | null;
+  description?: string | null;
+  icon: React.ElementType;
+}
+
+const formatDateForDisplay = (dateString?: string | null): string => {
+  if (!dateString) return 'Date N/A';
   try {
-    if (/^\d{4}$/.test(dateString)) { // Check if the date string is just a year
-        return dateString; 
-    }
-    // Attempt to format more complete dates
-    return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    if (/^\d{4}$/.test(dateString)) return dateString; // Just a year
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString; // Invalid date string
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' }); // Day can be added if needed
   } catch (e) {
-    // If parsing fails, return the original string; it might be a different format or non-standard.
-    return dateString; 
+    return dateString; // Return original if parsing fails
   }
 };
 
-const CareerTimeline: React.FC<CareerTimelineProps> = ({ politicalJourney }) => {
-  let journeyEntries: JourneyItem[] = [];
+const CareerTimeline: React.FC<CareerTimelineProps> = ({ politicalJourney, positions }) => {
+  let journeyEntries: CareerJourneyEntry[] = [];
 
   if (typeof politicalJourney === 'string' && politicalJourney.trim() !== "") {
     try {
       const parsed = JSON.parse(politicalJourney);
       if (Array.isArray(parsed)) {
-        journeyEntries = parsed.filter(item => typeof item === 'object' && item !== null && item.position && item.startDate);
-      } else {
-        console.warn("Parsed political journey is not an array:", parsed);
-        // Optionally, create a single error item to display
-        journeyEntries.push({ position: "Data format error", startDate: new Date().toISOString(), description: "Expected an array of journey items." });
+        journeyEntries = parsed.filter(item => typeof item === 'object' && item !== null && (item.position || item.title || item.degree) && (item.startDate || item.year));
+      } else if (typeof parsed === 'object' && parsed !== null) {
+        journeyEntries = [parsed as CareerJourneyEntry];
       }
     } catch (e) {
-      console.error("Failed to parse political journey JSON:", e);
-      return <p className="text-sm text-red-500">Political journey data could not be loaded due to a formatting error.</p>;
+      console.warn("Failed to parse political journey JSON, displaying as raw text:", e);
+      journeyEntries = [{ position: "Political journey data is malformed.", startDate: new Date().toISOString(), description: politicalJourney.substring(0, 200) + "..." }];
     }
   } else if (Array.isArray(politicalJourney)) {
-    journeyEntries = politicalJourney.filter(item => typeof item === 'object' && item !== null && item.position && item.startDate);
+    journeyEntries = politicalJourney.filter(item => typeof item === 'object' && item !== null && (item.position || item.title || item.degree) && (item.startDate || item.year));
   }
 
-  if (journeyEntries.length === 0) {
-    return <p className="text-muted-foreground italic text-sm">No political journey information has been provided.</p>;
+
+  const combinedItems: TimelineItem[] = [];
+
+  journeyEntries.forEach((entry, index) => {
+    const dateToSortBy = entry.startDate || entry.year || new Date(0).toISOString(); // Fallback for sorting
+    let icon = Milestone;
+    if (entry.type === 'Education' || entry.degree) icon = GraduationCap;
+    else if (entry.position || entry.type === 'Position Held') icon = Briefcase;
+
+    combinedItems.push({
+      id: `journey-${entry.id || index}`,
+      type: 'journey',
+      date: new Date(dateToSortBy),
+      title: entry.title || entry.position || entry.degree || 'Career Event',
+      subtitle: entry.organization || entry.institution || entry.party,
+      description: entry.description || entry.details,
+      icon: icon,
+    });
+  });
+
+  (positions ?? []).forEach(pos => {
+    if (pos.start_date) {
+      combinedItems.push({
+        id: `pos-${pos.id}`,
+        type: 'position',
+        date: new Date(pos.start_date),
+        title: pos.position_titles?.title || 'Position Held',
+        subtitle: pos.description || (pos.is_current ? 'Current Role' : ''),
+        description: pos.description,
+        icon: Briefcase,
+      });
+    }
+  });
+
+  if (combinedItems.length === 0) {
+    return <p className="text-muted-foreground italic text-sm">No career or political journey information available.</p>;
   }
 
-  try {
-    journeyEntries.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-  } catch (e) {
-    console.error("Error sorting journey entries by date:", e);
-    // If sorting fails due to invalid dates, proceed with unsorted or partially sorted data.
-  }
+  const sortedTimeline = combinedItems.sort((a, b) => b.date.getTime() - a.date.getTime()); // Most recent first
 
   return (
-    <div className="space-y-6 relative before:absolute before:inset-0 before:ml-[1.125rem] md:before:ml-5 before:h-full before:w-0.5 before:bg-gray-200 dark:before:bg-gray-700">
-      {journeyEntries.map((item, index) => (
-        <div key={index} className="relative pl-8 md:pl-10">
-          <div className="absolute left-[-0.125rem] md:left-0 top-0 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground ring-4 ring-background dark:ring-gray-900 shadow-md">
-            <Briefcase className="h-5 w-5" />
-          </div>
-          <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-3 md:p-4 ml-3 md:ml-4 hover:shadow-lg transition-shadow duration-200">
-            <h4 className="font-semibold text-base md:text-md mb-0.5 text-primary dark:text-sky-400">{item.position}</h4>
-            {item.party && (
-              <p className="text-xs md:text-sm text-muted-foreground font-medium">{item.party}</p>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">
-              {formatDate(item.startDate)} &ndash; {formatDate(item.endDate)}
-            </p>
-            {item.description && (
-              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                {item.description}
+    <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:h-full before:w-0.5 before:bg-gray-200 dark:before:bg-gray-700">
+      {sortedTimeline.map((item) => {
+        const IconComponent = item.icon;
+        return (
+          <div key={item.id} className="relative pl-12">
+            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground ring-4 ring-background dark:ring-gray-900 shadow-md">
+              <IconComponent className="h-5 w-5" />
+            </div>
+            <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-3 md:p-4 ml-3 md:ml-4 hover:shadow-lg transition-shadow duration-200">
+              <h4 className="font-semibold text-base md:text-md mb-0.5 text-primary dark:text-sky-400">{item.title}</h4>
+              {item.subtitle && (
+                <p className="text-xs md:text-sm text-muted-foreground font-medium">{item.subtitle}</p>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                {formatDateForDisplay(item.date.toISOString())}
+                {/* Assuming end date might be on journey items, not handled yet for display here */}
               </p>
-            )}
+              {item.description && (
+                <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                  {item.description}
+                </p>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };
 
 export default CareerTimeline;
+
+    

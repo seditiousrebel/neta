@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -14,44 +15,45 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { RichTextEditor } from './RichTextEditor';
-import { 
-  submitPoliticianEdit, 
+import {
+  submitPoliticianEdit,
   SubmitEditReturnType,
-  updatePoliticianDirectly, // Import the new action
-  DirectUpdateReturnType 
+  updatePoliticianDirectly,
+  DirectUpdateReturnType
 } from '@/lib/actions/politician.actions';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // For better select UI
 
 
 // Props that custom editors will receive
-export interface EditorProps<T = string | number> {
+export interface EditorProps<T = string | number | any[] | Record<string, any>> { // Allow complex types for custom editors
   value: T;
   onChange: (value: T) => void;
   disabled?: boolean;
   placeholder?: string;
   className?: string;
   id?: string;
-  // Add other common props that editors might need, e.g., maxLength for text inputs
-  maxLength?: number; 
-  // For select type or similar
-  options?: string[];
+  maxLength?: number;
+  options?: string[]; // For select type
+  // Allow any other props for custom editors
+  [key: string]: any;
 }
 
-export type FieldType = 'text' | 'textarea' | 'date' | 'richtext' | 'number' | 'url' | 'select' | 'custom'; // Added 'custom'
+export type FieldType = 'text' | 'textarea' | 'date' | 'richtext' | 'number' | 'url' | 'select' | 'custom';
 
 export interface EditModalProps {
   isOpen: boolean;
   onClose: () => void;
   politicianId: string;
   fieldName: string;
-  currentValue: string | number;
+  currentValue: any; // Allow any type for currentValue
   fieldType?: FieldType;
   fieldLabel?: string;
-  fieldOptions?: string[]; // For 'select' type
-  editorComponent?: React.ComponentType<EditorProps<any>>; // Allow any value type for custom editor for now
-  editorProps?: Record<string, any>; // For passing additional props like isBSDate to editors
-  isAdmin?: boolean; // Added isAdmin prop
+  fieldOptions?: string[];
+  editorComponent?: React.ComponentType<EditorProps<any>>;
+  editorProps?: Record<string, any>;
+  isAdmin?: boolean;
 }
 
 export function EditModal({
@@ -63,25 +65,23 @@ export function EditModal({
   fieldType = 'text',
   fieldLabel,
   fieldOptions,
-  editorComponent: CustomEditor, // Renamed for clarity
+  editorComponent: CustomEditor,
   editorProps,
-  isAdmin = false, // Default isAdmin to false
+  isAdmin = false,
 }: EditModalProps) {
   const [newValue, setNewValue] = useState(currentValue);
   const [changeReason, setChangeReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { user } = useAuth(); // Get user from auth context
-  const { toast } = useToast(); // For showing notifications
+  const { user } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Reset form when currentValue changes or modal opens
     setNewValue(currentValue);
     setChangeReason('');
-    // Reset isSubmitting when modal is reopened or form changes
     setIsSubmitting(false);
-  }, [currentValue, isOpen]);
+  }, [currentValue, isOpen, fieldName]); // Added fieldName to dependencies
 
-  const handleValueChange = (value: string | number) => {
+  const handleValueChange = (value: any) => { // Allow any type for value
     setNewValue(value);
   };
 
@@ -95,7 +95,12 @@ export function EditModal({
       return;
     }
 
-    const valueChanged = newValue !== currentValue;
+    // For array/object values, compare with JSON.stringify to detect actual change
+    const isComplexType = typeof currentValue === 'object' && currentValue !== null;
+    const valueChanged = isComplexType
+      ? JSON.stringify(newValue) !== JSON.stringify(currentValue)
+      : newValue !== currentValue;
+
     if (!valueChanged) {
       toast({ title: "No Changes Made", description: "The value is the same as the current one.", variant: "info" });
       return;
@@ -105,75 +110,55 @@ export function EditModal({
       toast({ title: "Change Reason Required", description: "Please provide a reason for your edit.", variant: "destructive" });
       return;
     }
-    
+
     setIsSubmitting(true);
+    let result: SubmitEditReturnType | DirectUpdateReturnType;
 
     if (isAdmin) {
-      try {
-        const result: DirectUpdateReturnType = await updatePoliticianDirectly(
-          politicianId,
-          fieldName,
-          newValue,
-          user.id, // adminId
-          changeReason.trim() // Optional reason for admin
-        );
-
-        if (result.success) {
-          toast({ 
-            title: "Admin Edit Successful", 
-            description: result.message || `Field "${fieldName}" updated directly.`, 
-            variant: "success" 
-          });
-          onClose();
-        } else {
-          console.error('Admin direct update failed:', result.error);
-          toast({ 
-            title: "Admin Edit Failed", 
-            description: result.message || result.error || "Could not apply changes directly.", 
-            variant: "destructive" 
-          });
-        }
-      } catch (error: any) {
-        console.error('Unexpected error during admin direct update:', error);
-        toast({ title: "Error", description: error.message || "An unexpected error occurred.", variant: "destructive" });
-      } finally {
-        setIsSubmitting(false);
-      }
+      result = await updatePoliticianDirectly(
+        politicianId,
+        fieldName,
+        newValue,
+        user.id,
+        changeReason.trim()
+      );
     } else {
-      // Non-admin: submit for review
-      try {
-        const result: SubmitEditReturnType = await submitPoliticianEdit(
-          politicianId,
-          fieldName,
-          newValue,
-          changeReason, // Already checked for non-admin
-          user.id
-        );
+      result = await submitPoliticianEdit(
+        politicianId,
+        fieldName,
+        newValue,
+        changeReason,
+        user.id
+      );
+    }
 
-        if (result.success) {
-          toast({ title: "Edit Submitted", description: result.message || "Your edit proposal has been submitted for review.", variant: "success" });
-          onClose();
-        } else {
-          console.error('Submission failed:', result.error);
-          toast({ title: "Submission Failed", description: result.message || "An error occurred.", variant: "destructive" });
-        }
-      } catch (error: any) {
-        console.error('Unexpected error during submission:', error);
-        toast({ title: "Error", description: error.message || "An unexpected error occurred.", variant: "destructive" });
-      } finally {
-        setIsSubmitting(false);
-      }
+    setIsSubmitting(false);
+    if (result.success) {
+      toast({
+        title: isAdmin ? "Admin Edit Successful" : "Edit Submitted",
+        description: result.message || (isAdmin ? `Field "${fieldName}" updated directly.` : "Your edit proposal has been submitted for review."),
+        variant: "success"
+      });
+      onClose(); // Close modal on success
+    } else {
+      toast({
+        title: isAdmin ? "Admin Edit Failed" : "Submission Failed",
+        description: result.message || result.error || "Could not apply changes.",
+        variant: "destructive"
+      });
     }
   };
 
-  const isValueChanged = newValue !== currentValue;
-  // Adjust canSubmit logic for admin
-  const canSubmit = 
-    isValueChanged && 
-    (isAdmin || changeReason.trim() !== '') && 
+  const isValueChanged = typeof currentValue === 'object' && currentValue !== null
+    ? JSON.stringify(newValue) !== JSON.stringify(currentValue)
+    : newValue !== currentValue;
+
+  const canSubmit =
+    isValueChanged &&
+    (isAdmin || changeReason.trim() !== '') &&
     !isSubmitting;
-    
-  const displayLabel = fieldLabel || fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+
+  const displayLabel = fieldLabel || fieldName.charAt(0).toUpperCase() + fieldName.slice(1).replace(/_/g, ' ');
 
   if (!isOpen) {
     return null;
@@ -183,26 +168,25 @@ export function EditModal({
     value: newValue,
     onChange: handleValueChange,
     disabled: isSubmitting,
-    id: "fieldValue",
+    id: `edit-${fieldName}`,
     placeholder: `Enter ${displayLabel.toLowerCase()}...`,
-    options: fieldOptions, // Pass options for select type
-    ...editorProps, // Spread additional editor-specific props like isBSDate
+    options: fieldOptions,
+    ...(editorProps || {}), // Spread additional editor-specific props
   };
 
   const renderEditor = () => {
     if (fieldType === 'custom' && CustomEditor) {
-      // For custom editors, pass editorProps which might contain specific configurations they need
-      return <CustomEditor {...editorCommonProps} {...(editorProps || {})} />;
+      return <CustomEditor {...editorCommonProps} />;
     }
 
     switch (fieldType) {
       case 'richtext':
-        return <RichTextEditor {...editorCommonProps} value={String(newValue)} />; // Ensure RichTextEditor takes string
+        return <RichTextEditor {...editorCommonProps} value={String(newValue ?? '')} />;
       case 'textarea':
         return (
           <Textarea
             {...editorCommonProps}
-            value={String(newValue)} // Ensure Textarea takes string
+            value={String(newValue ?? '')}
             onChange={(e) => handleValueChange(e.target.value)}
             className="min-h-[100px]"
           />
@@ -212,7 +196,7 @@ export function EditModal({
           <Input
             {...editorCommonProps}
             type="number"
-            value={newValue as number} // Assuming newValue is number for this type
+            value={newValue as number}
             onChange={(e) => handleValueChange(e.target.valueAsNumber ?? parseFloat(e.target.value))}
           />
         );
@@ -221,26 +205,26 @@ export function EditModal({
           <Input
             {...editorCommonProps}
             type="url"
-            value={String(newValue)} // Ensure Input takes string
+            value={String(newValue ?? '')}
             onChange={(e) => handleValueChange(e.target.value)}
           />
         );
-      // case 'date': // Assuming DateEditor is used via 'custom' or specific logic
-      //   return <DateEditor {...editorCommonProps} isBSDate={editorProps?.isBSDate} value={String(newValue)} />;
       case 'select':
-         // A basic select example if not using a custom component
-         // This would ideally be its own component for better reusability and UI.
         return (
-          <select
-            id={editorCommonProps.id}
-            value={String(newValue)}
-            onChange={(e) => handleValueChange(e.target.value)}
+          <Select
+            onValueChange={(val) => handleValueChange(val)}
+            defaultValue={String(newValue ?? '')}
             disabled={editorCommonProps.disabled}
-            className={cn("flex h-10 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50", editorCommonProps.className)}
           >
-            <option value="" disabled>{editorCommonProps.placeholder || `Select ${displayLabel}`}</option>
-            {editorCommonProps.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-          </select>
+            <SelectTrigger id={editorCommonProps.id} className={cn("w-full", editorCommonProps.className)}>
+              <SelectValue placeholder={editorCommonProps.placeholder || `Select ${displayLabel}`} />
+            </SelectTrigger>
+            <SelectContent>
+              {editorCommonProps.options?.map(opt => (
+                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         );
       case 'text':
       default:
@@ -248,7 +232,7 @@ export function EditModal({
           <Input
             {...editorCommonProps}
             type="text"
-            value={String(newValue)} // Ensure Input takes string
+            value={String(newValue ?? '')}
             onChange={(e) => handleValueChange(e.target.value)}
           />
         );
@@ -261,63 +245,63 @@ export function EditModal({
         <DialogHeader>
           <DialogTitle>Edit {displayLabel}</DialogTitle>
           <DialogDescription>
-            Make changes to the field: "{displayLabel}". Please provide a reason for your edit.
+            Current value: <span className="font-mono text-xs bg-muted p-1 rounded">{String(currentValue ?? 'Not set')}</span>
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4 flex-grow overflow-y-auto pr-2">
-          <div className="grid grid-cols-4 items-start gap-4"> {/* Changed items-center to items-start for better alignment with taller editors */}
-            <Label htmlFor="fieldValue" className="text-right pt-2"> {/* Added pt-2 for alignment */}
-              {displayLabel}
+          <div className="grid grid-cols-4 items-start gap-4">
+            <Label htmlFor={`edit-${fieldName}`} className="text-right pt-2 col-span-1">
+              New Value
             </Label>
             <div className="col-span-3">
               {renderEditor()}
             </div>
           </div>
 
-          <div className="grid grid-cols-4 items-start gap-4"> {/* Changed items-center to items-start */}
-            <Label htmlFor="changeReason" className="text-right pt-2 self-start">
-              Change Reason {isAdmin ? '(Optional)' : <span className="text-destructive">*</span>}
+          <div className="grid grid-cols-4 items-start gap-4">
+            <Label htmlFor="changeReason" className="text-right pt-2 col-span-1">
+              Reason {isAdmin ? '(Optional)' : <span className="text-destructive">*</span>}
             </Label>
             <Textarea
               id="changeReason"
               value={changeReason}
               onChange={handleReasonChange}
               placeholder={
-                isAdmin 
+                isAdmin
                   ? "Optional: Explain why you are making this change as an admin."
                   : "Explain why you are making this change (required)"
               }
               className="col-span-3 min-h-[100px]"
-              required={!isAdmin} // HTML5 required attribute
+              required={!isAdmin}
             />
           </div>
 
           {isValueChanged && (
-            <div className="mt-4 p-4 bg-muted/40 rounded-md">
-              <h4 className="font-semibold mb-2">Preview of Changes:</h4>
-              <div className="text-sm">
+            <div className="mt-4 p-3 bg-muted/40 rounded-md text-sm col-span-4">
+              <h4 className="font-semibold mb-1">Preview of Change:</h4>
                 <p>
-                  <span className="font-medium">{displayLabel}:</span>
-                  <span className="ml-1 line-through text-muted-foreground">{String(currentValue)}</span>
-                  <span className="ml-2 text-green-600 font-semibold">{String(newValue)}</span>
+                  <span className="font-medium text-muted-foreground line-through">{String(currentValue ?? 'N/A')}</span>
+                  <span className="mx-1 text-muted-foreground">→</span>
+                  <span className="text-green-600 font-semibold">{String(newValue ?? 'N/A')}</span>
                 </p>
-              </div>
             </div>
           )}
         </div>
 
-        <DialogFooter className="mt-auto pt-4 border-t"> {/* Added border for separation */}
+        <DialogFooter className="mt-auto pt-4 border-t">
           <DialogClose asChild>
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
           </DialogClose>
           <Button type="submit" onClick={handleSubmit} disabled={!canSubmit}>
-            {isSubmitting ? 'Submitting...' : 'Submit Edit'}
+            {isSubmitting ? 'Submitting...' : (isAdmin ? 'Save Directly' : 'Submit Edit')}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
+    

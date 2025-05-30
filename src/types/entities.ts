@@ -107,27 +107,25 @@ export type PoliticianPositionForCard = {
   position_titles: PoliticianPositionTitleForCard | null;
 };
 
-// Main type for items in the politician directory list
-export type PoliticianSummary = { // Renamed from PoliticianCardData for clarity if used elsewhere
-  id: string; // Changed from number to string to match typical UUID usage or bigint string conversion
+export type PoliticianSummary = {
+  id: string;
   name: string;
   name_nepali?: string | null;
   photo_url?: string | null;
   current_party_name?: string | null;
   current_position_title?: string | null;
-  public_criminal_records?: string | null; // Added this field
-  vote_score?: number; // Added this field
+  public_criminal_records?: string | null;
+  vote_score?: number;
 };
 
 
-// For filter dropdowns
 export interface PartyFilterOption {
-  id: string; // Changed to string to accommodate potential bigint IDs from DB
+  id: string;
   name: string;
 }
 
 export interface ProvinceFilterOption {
-  id: string; // Changed to string
+  id: string;
   name: string;
 }
 
@@ -135,7 +133,7 @@ export type PoliticianFiltersState = {
   partyId?: string | null;
   provinceId?: string | null;
   searchTerm?: string | null;
-  hasCriminalRecord?: "any" | "yes" | "no" | null;
+  hasCriminalRecord?: "any" | "yes" | "no" | string | null; // Allow string for safety
 };
 
 export type PoliticianMediaAsset = {
@@ -151,7 +149,7 @@ export type PoliticianParty = {
   name_nepali?: string | null;
   abbreviation?: string | null;
   logo_asset_id?: number | null;
-  logo?: PoliticianMediaAsset | null;
+  logo?: PoliticianMediaAsset | null; // Added for direct access to logo details
   ideology?: string | null;
 };
 
@@ -163,7 +161,7 @@ export type PoliticianPartyMembership = {
   end_date?: string | null;
   role_in_party?: string | null;
   is_active?: boolean | null;
-  parties: PoliticianParty | null;
+  parties: PoliticianParty | null; // Use the more detailed PoliticianParty type
 };
 
 export type PoliticianPositionTitle = {
@@ -196,32 +194,35 @@ export type PoliticianPromise = {
   description?: string | null;
   status: string;
   due_date?: string | null;
-  evidence_links?: any | null;
+  evidence_links?: any | null; // JSONB can be any
 };
 
-export type PoliticianCareerEntry = {
-  id: number;
-  entry_type: string;
-  title: string;
-  organization_name?: string | null;
-  start_date?: string | null;
-  end_date?: string | null;
-  description?: string | null;
-};
+// This interface represents a single entry in a politician's career or political journey.
+// It's designed to be flexible for data stored as JSONB.
+export interface CareerJourneyEntry {
+  position?: string; // Or title, role, etc.
+  organization?: string; // Or party, institution, etc.
+  startDate?: string; // Or year, date_from, etc.
+  endDate?: string | null; // Or year_to, date_to, etc.
+  description?: string;
+  // You can add other common fields you expect, e.g., type: 'Education' | 'Political Role'
+  [key: string]: any; // Allows for other arbitrary fields if the JSON structure varies
+}
+
 
 export type DetailedPolitician = {
   id: number;
   name: string;
   name_nepali?: string | null;
   is_independent: boolean;
-  dob?: string | null;
+  dob?: string | null; // YYYY-MM-DD
   dob_bs?: string | null;
-  gender?: string | null;
+  gender?: 'Male' | 'Female' | 'Other' | 'PreferNotToSay' | string | null; // Allow string for flexibility from DB
   bio?: string | null;
-  education?: string | null; // Stored as JSONB string, consider parsing
-  political_journey?: PoliticianCareerEntry[] | string | null; // JSONB string or parsed array
-  public_criminal_records?: string | null; // JSONB string or parsed array
-  asset_declarations?: string | null; // JSONB string or parsed array
+  education?: string | any[] | null; // Can be JSON string or parsed array
+  political_journey?: string | CareerJourneyEntry[] | null; // Can be JSON string or parsed array
+  public_criminal_records?: string | any[] | null; // Can be JSON string or parsed array
+  asset_declarations?: string | any[] | null; // Can be JSON string or parsed array
   twitter_handle?: string | null;
   facebook_profile_url?: string | null;
   contact_email?: string | null;
@@ -231,12 +232,12 @@ export type DetailedPolitician = {
   province_id?: number | null;
   created_at: string;
   updated_at: string;
-  media_assets: PoliticianMediaAsset | null;
+  media_assets: PoliticianMediaAsset | null; // For politician's photo
   party_memberships: PoliticianPartyMembership[] | null;
   politician_positions: PoliticianPosition[] | null;
   bill_votes: PoliticianBillVote[] | null;
   promises: PoliticianPromise[] | null;
-  politician_career_entries: PoliticianCareerEntry[] | null;
+  politician_career_entries: CareerJourneyEntry[] | null;
 };
 
 export type AdminPendingEdit = {
@@ -255,3 +256,5 @@ export type AdminPendingEdit = {
     full_name: string | null;
   } | null;
 };
+
+    

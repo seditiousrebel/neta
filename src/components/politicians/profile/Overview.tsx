@@ -1,44 +1,55 @@
+
 // src/components/politicians/profile/Overview.tsx
 import React from 'react';
+import type { CareerJourneyEntry, PoliticianPosition, PoliticianPartyMembership } from '@/types/entities'; // Assuming types are defined
 
 interface OverviewProps {
   biography?: string | null;
-  politicalJourney?: any[] | string | null; 
-  currentPosition?: string | null;
-  currentParty?: string | null;
+  education?: string | any[] | null; // Can be JSON string or parsed array
+  currentPositionData?: PoliticianPosition | null;
+  currentPartyData?: PoliticianPartyMembership | null;
 }
 
-const Overview: React.FC<OverviewProps> = ({ 
-  biography, 
-  politicalJourney, 
-  currentPosition, 
-  currentParty 
+const Overview: React.FC<OverviewProps> = ({
+  biography,
+  education,
+  currentPositionData,
+  currentPartyData,
 }) => {
-  let journeyEntries: any[] = [];
-  if (typeof politicalJourney === 'string' && politicalJourney.trim() !== "") {
+  let educationEntries: any[] = [];
+  if (typeof education === 'string' && education.trim() !== "") {
     try {
-      journeyEntries = JSON.parse(politicalJourney);
-      if (!Array.isArray(journeyEntries)) journeyEntries = [];
+      const parsed = JSON.parse(education);
+      if (Array.isArray(parsed)) {
+        educationEntries = parsed;
+      } else if (typeof parsed === 'object' && parsed !== null) {
+        educationEntries = [parsed]; // Handle single object case
+      } else {
+        // If it's a non-JSON string, display as is
+        educationEntries = [{ rawText: education }];
+      }
     } catch (e) {
-      console.warn("Failed to parse political journey JSON in Overview:", e);
-      journeyEntries = [{ position: "Could not parse political journey data.", party: politicalJourney, isError: true }];
+      console.warn("Failed to parse education JSON in Overview, displaying as raw text:", e);
+      educationEntries = [{ rawText: education }];
     }
-  } else if (Array.isArray(politicalJourney)) {
-    journeyEntries = politicalJourney;
+  } else if (Array.isArray(education)) {
+    educationEntries = education;
   }
 
-  const recentRoles = journeyEntries
-    .filter(role => !role.isError && (!role.endDate || new Date(role.endDate).getFullYear() >= new Date().getFullYear() - 2)) // Approx last 2 years or ongoing
-    .slice(-2) 
-    .reverse(); 
 
   return (
     <div className="space-y-6 text-sm">
-      {(currentPosition || currentParty) && (
+      {(currentPositionData || currentPartyData) && (
         <section>
           <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">Current Engagement</h3>
-          {currentPosition && <p><strong className="text-muted-foreground">Position:</strong> {currentPosition}</p>}
-          {currentParty && <p><strong className="text-muted-foreground">Party:</strong> {currentParty}</p>}
+          {currentPositionData?.position_titles?.title && (
+            <p><strong className="text-muted-foreground">Position:</strong> {currentPositionData.position_titles.title}</p>
+          )}
+          {currentPartyData?.parties?.name && (
+            <p><strong className="text-muted-foreground">Party:</strong> {currentPartyData.parties.name}
+            {currentPartyData.parties.abbreviation && ` (${currentPartyData.parties.abbreviation})`}
+            </p>
+          )}
         </section>
       )}
 
@@ -51,25 +62,28 @@ const Overview: React.FC<OverviewProps> = ({
         </section>
       )}
 
-      {recentRoles.length > 0 && (!currentPosition && !currentParty) && ( // Show only if not covered by explicit current roles
+      {educationEntries.length > 0 && (
         <section>
-          <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">Recent Political Roles</h3>
-          <ul className="list-disc pl-5 space-y-2">
-            {recentRoles.map((role, index) => (
-              <li key={index}>
-                <span className="font-medium">{role.position}</span>
-                {role.party && <span className="text-muted-foreground"> ({role.party})</span>}
-                <div className="text-xs text-muted-foreground">
-                  {role.startDate && `From: ${new Date(role.startDate).toLocaleDateString()}`}
-                  {role.endDate && ` - To: ${new Date(role.endDate).toLocaleDateString()}`}
-                </div>
-              </li>
-            ))}
-          </ul>
+          <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">Education</h3>
+          {educationEntries.map((edu, index) => (
+            <div key={index} className="mb-1 p-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+              {edu.rawText ? (
+                <p className="whitespace-pre-wrap">{edu.rawText}</p>
+              ) : (
+                <>
+                  {edu.degree && <p className="font-medium">{edu.degree}</p>}
+                  {edu.institution && <p className="text-xs text-muted-foreground">{edu.institution}</p>}
+                  {edu.year && <p className="text-xs text-muted-foreground">Graduated: {edu.year}</p>}
+                  {edu.field_of_study && <p className="text-xs text-muted-foreground">Field: {edu.field_of_study}</p>}
+                  {edu.details && <p className="text-xs mt-0.5">{edu.details}</p>}
+                </>
+              )}
+            </div>
+          ))}
         </section>
       )}
-      
-      {journeyEntries.length === 0 && !biography && !currentPosition && !currentParty && (
+
+      {!biography && educationEntries.length === 0 && !currentPositionData && !currentPartyData && (
         <p className="text-muted-foreground italic">No overview information available for this politician.</p>
       )}
     </div>
@@ -77,3 +91,5 @@ const Overview: React.FC<OverviewProps> = ({
 };
 
 export default Overview;
+
+    
