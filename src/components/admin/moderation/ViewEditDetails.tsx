@@ -16,7 +16,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { UserCircle, Edit, CheckCircle, XCircle } from "lucide-react";
-import { denyPendingEditAction, approvePendingEditAction } from "@/lib/actions/moderation.actions"; // Import actions
+import { denyPendingEditAction, approvePendingEditAction } from "@/lib/actions/moderation.actions";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 
@@ -42,10 +42,9 @@ export function ViewEditDetails({ edit }: ViewEditDetailsProps) {
 
   const handleDeny = async () => {
     setIsSubmitting(true);
-    // In a real scenario, prompt for a reason here
     const result = await denyPendingEditAction(edit.id);
     if (result.success) {
-      toast({ title: "Edit Denied", description: "The pending edit has been denied." });
+      toast({ title: "Edit Denied", description: result.message || "The pending edit has been denied." });
       // Optionally close dialog or trigger refresh through other means if revalidatePath isn't immediate
     } else {
       toast({ title: "Error", description: result.error || "Failed to deny edit.", variant: "destructive" });
@@ -55,11 +54,11 @@ export function ViewEditDetails({ edit }: ViewEditDetailsProps) {
 
   const handleApprove = async () => {
     setIsSubmitting(true);
-    const result = await approvePendingEditAction(edit.id); // Placeholder
+    const result = await approvePendingEditAction(edit.id); 
     if (result.success) {
-      toast({ title: "Edit Approved (Placeholder)", description: "The pending edit has been approved." });
+      toast({ title: "Edit Approved", description: result.message || "The pending edit has been approved." });
     } else {
-      toast({ title: "Error", description: result.error || "Failed to approve edit.", variant: "destructive" });
+      toast({ title: "Error Approving", description: result.error || "Failed to approve edit.", variant: "destructive" });
     }
     setIsSubmitting(false);
   };
@@ -121,13 +120,12 @@ export function ViewEditDetails({ edit }: ViewEditDetailsProps) {
           <Button variant="destructive" onClick={handleDeny} disabled={isSubmitting}>
             <XCircle className="mr-2 h-4 w-4" /> {isSubmitting ? "Denying..." : "Deny"}
           </Button>
-          <Button variant="default" onClick={handleApprove} disabled={true || isSubmitting}> {/* Approve disabled for now */}
-            <CheckCircle className="mr-2 h-4 w-4" /> {isSubmitting ? "Approving..." : "Approve (WIP)"}
+          <Button variant="default" onClick={handleApprove} disabled={isSubmitting}> 
+            <CheckCircle className="mr-2 h-4 w-4" /> {isSubmitting ? "Approving..." : "Approve"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-
     

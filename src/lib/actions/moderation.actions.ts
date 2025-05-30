@@ -2,7 +2,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { denyEdit } from "@/lib/supabase/admin"; // We'll implement approveEdit later
+import { denyEdit, approveEdit } from "@/lib/supabase/admin"; // Import approveEdit
 import { createSupabaseServerClient } from "../supabase/server";
 
 export async function denyPendingEditAction(editId: number) {
@@ -27,18 +27,25 @@ export async function denyPendingEditAction(editId: number) {
 }
 
 export async function approvePendingEditAction(editId: number) {
-  // Placeholder for approve action
-  console.log(`Server Action: Attempting to approve edit ${editId}`);
-  // const result = await approveEdit(editId);
-  // if (result.success) {
-  //   revalidatePath("/admin/moderation");
-  //   return { success: true, message: "Edit approved successfully." };
-  // } else {
-  //   return { success: false, error: result.error || "Failed to approve edit." };
-  // }
-  await new Promise(resolve => setTimeout(resolve, 500)); // Simulate async work
-  revalidatePath("/admin/moderation");
-  return { success: true, message: "Approve action placeholder - Edit marked for revalidation." };
+  const supabase = createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "User not authenticated." };
+  }
+  // Potentially add role check here if needed, though AdminGuard on layout should cover it.
+
+  const result = await approveEdit(editId);
+  
+  if (result.success) {
+    revalidatePath("/admin/moderation");
+    // TODO: Consider revalidating specific entity paths if possible.
+    // Example: If a politician was edited, revalidatePaths like `/politicians` and `/politicians/${entityId}`
+    // This requires getting entityId and type from `result` or fetching the edit again.
+    return { success: true, message: result.message || "Edit approved successfully." };
+  } else {
+    return { success: false, error: result.error || "Failed to approve edit." };
+  }
 }
 
     

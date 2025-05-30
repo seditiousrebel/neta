@@ -8,8 +8,7 @@ import { getPendingEdits } from "@/lib/supabase/admin";
 import type { AdminPendingEdit } from "@/types/entities";
 import { Badge } from "@/components/ui/badge";
 import { ViewEditDetails } from "@/components/admin/moderation/ViewEditDetails";
-import { denyPendingEditAction, approvePendingEditAction } from "@/lib/actions/moderation.actions"; // Import actions
-import { useToast } from "@/hooks/use-toast"; // To show feedback, but we can't use hooks directly in server components. Feedback must be client-side or via redirects.
+import { denyPendingEditAction, approvePendingEditAction } from "@/lib/actions/moderation.actions"; 
 
 export default async function ModerationPage() {
   const { edits: pendingEdits, count: totalPendingEdits } = await getPendingEdits({ page: 1 });
@@ -25,14 +24,13 @@ export default async function ModerationPage() {
     return edit.proposer_id;
   };
 
-  // Server action needs to be callable from a form
+  // Server actions are called directly from forms
   const denyAction = async (formData: FormData) => {
     "use server";
     const editId = Number(formData.get("editId"));
-    if (!editId) return; // Or handle error
+    if (!editId) return; 
     // In a real scenario, you might get a reason from the form too
     const result = await denyPendingEditAction(editId); 
-    // Revalidation is handled in the action. For direct feedback, client component + toast is better.
     if (!result.success) {
         console.error("Failed to deny edit:", result.error);
     }
@@ -42,7 +40,7 @@ export default async function ModerationPage() {
     "use server";
     const editId = Number(formData.get("editId"));
     if (!editId) return;
-    const result = await approvePendingEditAction(editId); // Placeholder
+    const result = await approvePendingEditAction(editId); 
     if (!result.success) {
         console.error("Failed to approve edit:", result.error);
     }
@@ -107,7 +105,7 @@ export default async function ModerationPage() {
                           <ViewEditDetails edit={edit} />
                           <form action={approveAction} className="inline-block">
                             <input type="hidden" name="editId" value={edit.id} />
-                            <Button type="submit" variant="ghost" size="icon" className="text-green-600 hover:text-green-700 hover:bg-green-100" title="Approve" disabled>
+                            <Button type="submit" variant="ghost" size="icon" className="text-green-600 hover:text-green-700 hover:bg-green-100" title="Approve">
                               <CheckCircle className="h-5 w-5" />
                             </Button>
                           </form>
@@ -163,5 +161,4 @@ export default async function ModerationPage() {
     </div>
   );
 }
-
     

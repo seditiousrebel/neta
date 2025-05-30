@@ -4,6 +4,7 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { AdminPendingEdit } from '@/types/entities';
+import type { Database, Tables } from '@/types/supabase'; // Assuming Tables type is available
 
 /**
  * Checks if the currently authenticated user has the 'Admin' role.
@@ -68,28 +69,89 @@ export async function getPendingEdits(options: { page?: number } = {}): Promise<
   return { edits: data as AdminPendingEdit[], count };
 }
 
-export async function approveEdit(editId: number): Promise<{ success: boolean, error?: string }> {
-  // Placeholder: Implement logic to:
-  // 1. Fetch the pending_edit by editId.
-  // 2. Determine the target table (e.g., 'politicians', 'parties') based on entity_type.
-  // 3. Apply the 'proposed_data' to the target table's entity_id record.
-  // 4. Update the pending_edit status to 'Approved'.
-  // 5. Potentially award contribution points to the proposer.
-  console.log(`Approving edit ${editId} - NOT IMPLEMENTED`);
+export async function approveEdit(editId: number): Promise<{ success: boolean, error?: string, message?: string }> {
   const supabase = createSupabaseServerClient();
-  // Example:
-  // const { data: edit, error: fetchError } = await supabase.from('pending_edits').select('*').eq('id', editId).single();
-  // if (fetchError || !edit) return { success: false, error: "Edit not found" };
-  // if (edit.entity_type === 'politician' && edit.entity_id && edit.proposed_data) {
-  //   const { error: updateError } = await supabase.from('politicians').update(edit.proposed_data as any).eq('id', edit.entity_id);
-  //   if (updateError) return { success: false, error: `Failed to update politician: ${updateError.message}`};
-  // }
-  // const { error: statusError } = await supabase.from('pending_edits').update({ status: 'Approved', admin_feedback: 'Approved by admin' }).eq('id', editId);
-  // if (statusError) return { success: false, error: `Failed to update edit status: ${statusError.message}`};
   
-  await new Promise(resolve => setTimeout(resolve, 500)); // Simulate async work
-  return { success: true }; // Placeholder
+  // 1. Fetch the pending_edit by editId.
+  const { data: edit, error: fetchError } = await supabase
+    .from('pending_edits')
+    .select('*')
+    .eq('id', editId)
+    .single();
+
+  if (fetchError || !edit) {
+    console.error(`Error fetching pending edit ${editId}:`, fetchError?.message);
+    return { success: false, error: `Pending edit with ID ${editId} not found or fetch error.` };
+  }
+
+  if (edit.status !== 'Pending') {
+    return { success: false, error: `Edit ${editId} is not in 'Pending' status.` };
+  }
+
+  if (!edit.entity_id || !edit.proposed_data || !edit.entity_type) {
+    return { success: false, error: `Edit ${editId} is missing entity_id, proposed_data, or entity_type.` };
+  }
+
+  let targetTable: keyof Database['public']['Tables'] | null = null;
+
+  // 2. Determine the target table based on entity_type.
+  switch (edit.entity_type) {
+    case 'Politician': // Ensure this matches your ENUM or string value in the DB
+      targetTable = 'politicians';
+      break;
+    case 'Party': // Ensure this matches your ENUM or string value in the DB
+      targetTable = 'parties';
+      break;
+    // Add more cases for other entity types you support
+    default:
+      console.error(`Unsupported entity_type for approval: ${edit.entity_type}`);
+      return { success: false, error: `Entity type '${edit.entity_type}' is not supported for approval.` };
+  }
+
+  try {
+    // 3. Apply the 'proposed_data' to the target table's entity_id record.
+    // Ensure proposed_data is a valid partial object for the target table.
+    // The 'id' column should NOT be in proposed_data for an update.
+    const updateData = edit.proposed_data as Omit<Tables<typeof targetTable>['Update'], 'id'>;
+    
+    const { error: updateError } = await supabase
+      .from(targetTable)
+      // @ts-ignore - Supabase types struggle with dynamic table names and data
+      .update(updateData) 
+      .eq('id', edit.entity_id);
+
+    if (updateError) {
+      console.error(`Error updating ${targetTable} with ID ${edit.entity_id}:`, updateError.message);
+      return { success: false, error: `Failed to update ${edit.entity_type}: ${updateError.message}` };
+    }
+
+    // 4. Update the pending_edit status to 'Approved'.
+    const { error: statusError } = await supabase
+      .from('pending_edits')
+      .update({ 
+        status: 'Approved', 
+        admin_feedback: `Approved by admin on ${new Date().toLocaleDateString()}`,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', editId);
+
+    if (statusError) {
+      console.error(`Error updating status for edit ${editId}:`, statusError.message);
+      // Potentially roll back or log this inconsistency
+      return { success: false, error: `Entity updated, but failed to update edit status: ${statusError.message}` };
+    }
+    
+    // 5. Potentially award contribution points to the proposer (can be a separate function/step).
+    // For now, we'll skip this for brevity.
+
+    return { success: true, message: `${edit.entity_type} with ID ${edit.entity_id} approved successfully.` };
+
+  } catch (e: any) {
+    console.error(`Unexpected error during approval process for edit ${editId}:`, e.message);
+    return { success: false, error: `An unexpected error occurred: ${e.message}` };
+  }
 }
+
 
 export async function denyEdit(editId: number, reason: string): Promise<{ success: boolean, error?: string }> {
   const supabase = createSupabaseServerClient();
