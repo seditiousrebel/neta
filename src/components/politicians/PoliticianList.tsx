@@ -4,10 +4,10 @@
 import { useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { usePoliticians } from '@/hooks/usePoliticians';
-import { PoliticianCard } from './PoliticianCard';
+import PoliticianCard from './PoliticianCard'; // Changed from { PoliticianCard }
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import type { PoliticianCardData } from '@/types/entities';
+import type { PoliticianSummary as PoliticianCardData } from '@/types/entities'; // Ensure PoliticianCardData is correctly typed or use PoliticianSummary
 
 interface PoliticianListProps {
   initialPoliticians: PoliticianCardData[];
@@ -16,9 +16,11 @@ interface PoliticianListProps {
 
 export default function PoliticianList({ initialPoliticians, initialTotalCount }: PoliticianListProps) {
   const searchParams = useSearchParams();
-  const searchTerm = searchParams.get('search') || '';
+  const searchTerm = searchParams.get('q') || '';
   const partyId = searchParams.get('partyId') || '';
-  // const provinceId = searchParams.get('provinceId') || '';
+  const provinceId = searchParams.get('provinceId') || '';
+  const hasCriminalRecord = searchParams.get('has_criminal_record') || 'any';
+
 
   // Prepare initial data for useInfiniteQuery
   const preparedInitialData = {
@@ -36,11 +38,8 @@ export default function PoliticianList({ initialPoliticians, initialTotalCount }
     isError,
     error,
   } = usePoliticians(
-    { searchTerm, partyId /*, provinceId */ },
-    (initialPoliticians && initialPoliticians.length > 0) || searchTerm || partyId ? undefined : preparedInitialData 
-    // ^ Only use initialData if no filters are applied on first client load, to avoid stale data display
-    // Or more simply, if this component receives initial data, it means SSR happened for current filters.
-    // The hook needs initialData in a specific format { pages: [initialPage], pageParams: [initialPageParam] }
+    { searchTerm, partyId, provinceId, hasCriminalRecord },
+    (initialPoliticians && initialPoliticians.length > 0) || searchTerm || partyId || provinceId || (hasCriminalRecord && hasCriminalRecord !== 'any') ? undefined : preparedInitialData 
   );
 
   const allPoliticians = data?.pages.flatMap(page => page.data) || [];
